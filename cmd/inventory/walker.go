@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/rwcarlsen/cyan/query"
 	"code.google.com/p/go-sqlite/go1/sqlite3"
 )
 
@@ -16,16 +17,16 @@ var (
 	preExecStmts = []string{
 		"DROP TABLE IF EXISTS Inventories",
 		"CREATE TABLE Inventories (SimID TEXT,ResID INTEGER,AgentID INTEGER,StartTime INTEGER,EndTime INTEGER);",
-		Index("Resources", "SimID", "ID", "StateID"),
-		Index("Compositions", "SimID", "ID", "IsoID"),
-		Index("Transactions", "ID"),
-		Index("TransactedResources", "SimID", "ResourceID", "TransactionID"),
-		Index("ResCreators", "SimID", "ResID"),
-		Index("Agents", "SimID", "Prototype"),
+		query.Index("Resources", "SimID", "ID", "StateID"),
+		query.Index("Compositions", "SimID", "ID", "IsoID"),
+		query.Index("Transactions", "ID"),
+		query.Index("TransactedResources", "SimID", "ResourceID", "TransactionID"),
+		query.Index("ResCreators", "SimID", "ResID"),
+		query.Index("Agents", "SimID", "Prototype"),
 	}
 	postExecStmts = []string{
-		Index("Inventories", "SimID", "AgentID"),
-		Index("Inventories", "SimID", "ResID", "StartTime"),
+		query.Index("Inventories", "SimID", "AgentID"),
+		query.Index("Inventories", "SimID", "ResID", "StartTime"),
 	}
 	dumpSql    = "INSERT INTO Inventories VALUES (?,?,?,?,?);"
 	resSqlHead = "SELECT ID,TimeCreated FROM "
@@ -113,10 +114,10 @@ func (c *Context) init() {
 	panicif(err)
 
 	fmt.Println("Indexing temporary resource table...")
-	err = c.Exec(Index(c.tmpResTbl, "Parent1"))
+	err = c.Exec(query.Index(c.tmpResTbl, "Parent1"))
 	panicif(err)
 
-	err = c.Exec(Index(c.tmpResTbl, "Parent2"))
+	err = c.Exec(query.Index(c.tmpResTbl, "Parent2"))
 	panicif(err)
 
 	// create prepared statements
