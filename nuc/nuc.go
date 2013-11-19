@@ -33,7 +33,7 @@ func (n Nuc) Z() int {
 
 // Atoms returns the number of atoms of nuclide n for mass m.
 func Atoms(n Nuc, m Mass) float64 {
-	return float64(m / Mass(n.A())) * Mol
+	return float64(m/Mass(n.A())) * Mol
 }
 
 type Material map[Nuc]Mass
@@ -62,4 +62,3 @@ func (m Material) FPE() (energy float64) {
 	}
 	return energy
 }
-

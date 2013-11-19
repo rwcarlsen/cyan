@@ -1,9 +1,9 @@
 package query
 
 import (
-	"fmt"
 	"bytes"
 	"database/sql"
+	"fmt"
 
 	"github.com/rwcarlsen/cyan/nuc"
 )
@@ -129,13 +129,13 @@ func makeMaterial(db *sql.DB, sql string, args ...interface{}) (m nuc.Material, 
 	}
 
 	m = nuc.Material{}
-	var iso nuc.Nuc
-	var qty nuc.Mass
+	var iso int
+	var qty float64
 	for rows.Next() {
 		if err := rows.Scan(&iso, &qty); err != nil {
 			return nil, err
 		}
-		m[iso] = qty
+		m[nuc.Nuc(iso)] = nuc.Mass(qty)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

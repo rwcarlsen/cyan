@@ -1,23 +1,23 @@
 package main
 
 import (
-	"fmt"
-	"flag"
-	"log"
 	"database/sql"
+	"flag"
+	"fmt"
+	"log"
 
 	_ "code.google.com/p/go-sqlite/go1/sqlite3"
 	"github.com/rwcarlsen/cyan/query"
 )
 
 var (
-	pid = flag.Bool("pid", false, "Print simulation ids")
-	help = flag.Bool("h", false, "Print this help message")
+	pid   = flag.Bool("pid", false, "Print simulation ids")
+	help  = flag.Bool("h", false, "Print this help message")
 	simid = flag.String("simid", "", "simulation id (empty string defaults to first sim id in database")
 
-	invat = flag.Int("inv", -1, "Print global inventory at specified time (-1 prints inventory at simulation end)")
+	invat     = flag.Int("inv", -1, "Print global inventory at specified time (-1 prints inventory at simulation end)")
 	createinv = flag.Bool("created", false, "Print total of all created material")
-	fpeat = flag.Int("fpe", 0, "Print fission potential energy in Joules at specified simulation timestep")
+	fpeat     = flag.Int("fpe", 0, "Print fission potential energy in Joules at specified simulation timestep")
 )
 
 var db *sql.DB

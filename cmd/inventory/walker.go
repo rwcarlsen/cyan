@@ -6,8 +6,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/rwcarlsen/cyan/query"
 	"code.google.com/p/go-sqlite/go1/sqlite3"
+	"github.com/rwcarlsen/cyan/query"
 )
 
 // The number of sql commands to buffer before dumping to the output database.
@@ -88,13 +88,13 @@ type Context struct {
 	ownerStmt   *sqlite3.Stmt
 	resCount    int
 	nodes       []*Node
-	History chan string
+	History     chan string
 }
 
 func NewContext(conn *sqlite3.Conn, simid string, history chan string) *Context {
 	return &Context{
-		Conn: conn,
-		Simid: simid,
+		Conn:    conn,
+		Simid:   simid,
 		History: history,
 	}
 }

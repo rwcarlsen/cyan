@@ -1,9 +1,8 @@
-
 package main
 
 import (
-	"testing"
 	"os"
+	"testing"
 
 	"code.google.com/p/go-sqlite/go1/sqlite3"
 )

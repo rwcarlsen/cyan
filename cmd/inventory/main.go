@@ -2,8 +2,8 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"log"
 
 	"code.google.com/p/go-sqlite/go1/sqlite3"
@@ -21,7 +21,6 @@ func main() {
 		flag.PrintDefaults()
 		return
 	}
-
 
 	fname := flag.Arg(0)
 
