@@ -40,8 +40,8 @@ var FertNuc = []Nuc{
 	Pu240,
 }
 
-// FissE contains energy release per fission in MeV
-var FissE = map[Nuc]float64{
+// FissFertE contains energy release per fission in MeV
+var FissFertE = map[Nuc]float64{
 	U235:  200 * MeV,
 	U233:  200 * MeV,
 	Pu239: 200 * MeV,
@@ -50,4 +50,9 @@ var FissE = map[Nuc]float64{
 	Cu245: 200 * MeV,
 	Cu247: 200 * MeV,
 	Cf251: 200 * MeV,
+	Th232: 200 * MeV,
+	U234 : 200 * MeV,
+	U238 : 200 * MeV,
+	Pu238: 200 * MeV,
+	Pu240: 200 * MeV,
 }

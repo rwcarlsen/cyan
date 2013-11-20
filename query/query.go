@@ -55,7 +55,7 @@ type SimInfo struct {
 
 func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
 	sql := "SELECT SimulationStart,Duration FROM SimulationTimeInfo WHERE SimID = ?"
-	rows, err := db.Query(sql)
+	rows, err := db.Query(sql, simid)
 	if err != nil {
 		return si, err
 	}
@@ -72,19 +72,22 @@ func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
 }
 
 func AllMatCreated(db *sql.DB, simid string) (m nuc.Material, err error) {
+	if err := index(db); err != nil {
+		return nil, err
+	}
 	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * res.Quantity)
 	        	FROM Resources As res
 				INNER JOIN Compositions AS cmp ON res.StateID = cmp.ID
 				INNER JOIN ResCreators AS cre ON res.ID = cre.ResID
 				WHERE
-					res.SimID = ? AND res.SimID = ?
+					cre.SimID = ? AND cre.SimID = res.SimID AND cre.SimID = cmp.SimID
 				GROUP BY cmp.IsoID;`
-	return makeMaterial(db, sql, simid, simid)
+	return makeMaterial(db, sql, simid)
 }
 
 func index(db *sql.DB) error {
 	sqls := []string{
-		Index("Compositions", "ID", "IsoID"),
+		Index("Compositions", "ID", "IsoID", "Quantity"),
 	}
 
 	for _, sql := range sqls {
@@ -92,6 +95,7 @@ func index(db *sql.DB) error {
 			return err
 		}
 	}
+	fmt.Println("done indexing")
 	return nil
 }
 
@@ -101,7 +105,6 @@ func AllMatAt(db *sql.DB, simid string, t int) (m nuc.Material, err error) {
 	if err := index(db); err != nil {
 		return nil, err
 	}
-	fmt.Println("done indexing")
 
 	if t == -1 {
 		si, err := SimStat(db, simid)

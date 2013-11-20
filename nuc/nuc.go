@@ -58,7 +58,7 @@ func (m Material) EltMass(anum int) (tot Mass) {
 // material described by m.
 func (m Material) FPE() (energy float64) {
 	for n, qty := range m {
-		energy += FissE[n] * Atoms(n, qty)
+		energy += FissFertE[n] * Atoms(n, qty)
 	}
 	return energy
 }

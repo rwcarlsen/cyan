@@ -65,7 +65,7 @@ func processFlags(fg *flag.Flag) {
 		m, err := query.AllMatAt(db, *simid, *invat)
 		fatalif(err)
 		fmt.Printf("%+v\n", m)
-	case "createinv":
+	case "created":
 		if *createinv {
 			m, err := query.AllMatCreated(db, *simid)
 			fatalif(err)
