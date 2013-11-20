@@ -8,6 +8,39 @@ import (
 	"github.com/rwcarlsen/cyan/nuc"
 )
 
+func Breakout(src, dst string, simid string) error {
+	f1, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer f1.Close()
+
+	f2, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer f2.Close()
+
+	err, _ = io.Copy(dst, src)
+	if err != nil {
+		return err
+	}
+
+	sqls := []string{
+		"DELETE FROM Resources WHERE SimID = ?;",
+		"DELETE FROM Compositions WHERE SimID = ?;",
+		"DELETE FROM Transactions WHERE SimID = ?;",
+		"DELETE FROM TransactedResources WHERE SimID = ?;",
+		"DELETE FROM Inventories WHERE SimID = ?;",
+		"DELETE FROM ResCreators WHERE SimID = ?;",
+		"DELETE FROM Agents WHERE SimID = ?;",
+	rows, err := db.Query(sql)
+	if err != nil {
+		return nil, err
+	}
+
+}
+
 // Index builds an sql statement for creating a new index on the specified
 // table over cols.  The index is named according to the table and cols.
 func Index(table string, cols ...string) string {
