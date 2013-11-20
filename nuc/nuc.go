@@ -1,8 +1,5 @@
 package nuc
 
-// Mass represents a quantity in kg
-type Mass float64
-
 const (
 	Kg = 1
 	g  = 1e-3 * Kg
@@ -17,6 +14,9 @@ const (
 	Atom = 1
 	Mol  = 6.022e23 * Atom
 )
+
+// Mass represents a quantity in kg
+type Mass float64
 
 // Nuc describes a nuclide in ZZZAAA format.
 type Nuc int
