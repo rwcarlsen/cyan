@@ -27,6 +27,7 @@ var (
 	postExecStmts = []string{
 		query.Index("Inventories", "SimID", "AgentID"),
 		query.Index("Inventories", "SimID", "ResID", "StartTime"),
+		"ANALYZE;",
 	}
 	dumpSql    = "INSERT INTO Inventories VALUES (?,?,?,?,?);"
 	resSqlHead = "SELECT ID,TimeCreated FROM "
