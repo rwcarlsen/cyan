@@ -60,6 +60,8 @@ func main() {
 		doInv()
 	case "created":
 		doCreated()
+	case "flow":
+		doFlow()
 	case "test":
 		test()
 	default:
@@ -138,6 +140,45 @@ func doCreated() {
 	}
 
 	m, err := query.MatCreated(db, *simid, t0, t1, agents...)
+	fatalif(err)
+	fmt.Printf("%+v\n", m)
+}
+
+func doFlow() {
+	var err error
+	t0, t1 := -1, -1
+	var from []int
+	var to []int
+
+	if flag.NArg() < 6 {
+		log.Fatal("need 4 args for flow: <t0> <t1> <fromAgents...> .. <toAgents...>")
+	}
+
+	t0, err = strconv.Atoi(flag.Arg(1))
+	fatalif(err)
+	t1, err = strconv.Atoi(flag.Arg(2))
+	fatalif(err)
+
+	before := true
+	for _, arg := range flag.Args()[3:] {
+		if arg == ".." {
+			before = false
+			continue
+		}
+
+		id, err := strconv.Atoi(arg)
+		fatalif(err)
+		if before {
+			from = append(from, id)
+		} else {
+			to = append(to, id)
+		}
+	}
+	if len(to) < 1 {
+		log.Fatal("no receiving agents specified. Use <fromAgents> .. <toAgents>")
+	}
+
+	m, err := query.Flow(db, *simid, t0, t1, from, to)
 	fatalif(err)
 	fmt.Printf("%+v\n", m)
 }
