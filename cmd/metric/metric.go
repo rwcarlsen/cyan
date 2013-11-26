@@ -14,7 +14,6 @@ import (
 var (
 	help   = flag.Bool("h", false, "Print this help message")
 	dbname = flag.String("db", "", "cyclus sqlite database to query")
-	sims   = flag.Bool("sims", false, "Print simulation ids")
 	simid  = flag.String("simid", "", "simulation id (empty string defaults to first sim id in database")
 )
 
@@ -41,14 +40,6 @@ func main() {
 	fatalif(err)
 	defer db.Close()
 
-	if *sims {
-		ids, err := query.SimIds(db)
-		fatalif(err)
-		for _, id := range ids {
-			fmt.Println(id)
-		}
-		return
-	}
 	if *simid == "" {
 		ids, err := query.SimIds(db)
 		fatalif(err)
@@ -56,6 +47,20 @@ func main() {
 	}
 
 	switch flag.Arg(0) {
+	case "sims":
+		ids, err := query.SimIds(db)
+		fatalif(err)
+		for _, id := range ids {
+			info, err := query.SimStat(db, id)
+			fatalif(err)
+			fmt.Println(info)
+		}
+	case "agents":
+		ags, err := query.AllAgents(db, *simid)
+		fatalif(err)
+		for _, a := range ags {
+			fmt.Println(a)
+		}
 	case "inv":
 		doInv()
 	case "created":

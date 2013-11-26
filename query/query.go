@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"database/sql"
+	"fmt"
 	"strconv"
 
 	"github.com/rwcarlsen/cyan/nuc"
@@ -31,9 +32,52 @@ func SimIds(db *sql.DB) (ids []string, err error) {
 }
 
 type SimInfo struct {
+	Id          string
 	StartTime   int
 	Duration    int
 	DecayPeriod int
+}
+
+func (si SimInfo) String() string {
+	return fmt.Sprintf("%v: start=%v, end=%v, decay=%v", si.Id,
+		si.StartTime, si.StartTime+si.Duration, si.DecayPeriod)
+}
+
+type AgentInfo struct {
+	Id     int
+	Type   string
+	Model  string
+	Proto  string
+	Parent int
+	Enter  int
+	Exit   int
+}
+
+func (ai AgentInfo) String() string {
+	return fmt.Sprintf("%v [%v:%v:%v]: parent=%v, enter=%v, exit=%v", ai.Id,
+		ai.Type, ai.Model, ai.Proto, ai.Parent, ai.Enter, ai.Exit)
+}
+
+func AllAgents(db *sql.DB, simid string) (ags []AgentInfo, err error) {
+	sql := `SELECT ID,AgentType,ModelType,Prototype,ParentID,EnterDate,DeathDate FROM
+				Agents INNER JOIN AgentDeaths ON Agents.ID = AgentDeaths.AgentID
+			WHERE Agents.SimID = ? AND Agents.SimID = AgentDeaths.SimID;`
+	rows, err := db.Query(sql, simid)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		ai := AgentInfo{}
+		if err := rows.Scan(&ai.Id, &ai.Type, &ai.Model, &ai.Proto, &ai.Parent, &ai.Enter, &ai.Exit); err != nil {
+			return nil, err
+		}
+		ags = append(ags, ai)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return ags, nil
 }
 
 func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
@@ -42,7 +86,6 @@ func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
 	if err != nil {
 		return si, err
 	}
-
 	for rows.Next() {
 		if err := rows.Scan(&si.StartTime, &si.Duration); err != nil {
 			return si, err
@@ -51,6 +94,8 @@ func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
 	if err := rows.Err(); err != nil {
 		return si, err
 	}
+
+	si.Id = simid
 	return si, nil
 }
 
