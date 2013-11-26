@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"database/sql"
+	"strconv"
 
 	"github.com/rwcarlsen/cyan/nuc"
 )
@@ -53,20 +54,43 @@ func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
 	return si, nil
 }
 
-func AllMatCreated(db *sql.DB, simid string) (m nuc.Material, err error) {
+// MatCreated returns the total amount of material created by the listed
+// agent ids in the simulation for the given sim id between t0 and t1. Passing no
+// agents defaults to all agents. Use t0=-1 to specify beginning-of-simulation.
+// Use t1=-1 to specify end-of-simulation.
+func MatCreated(db *sql.DB, simid string, t0, t1 int, agents ...int) (m nuc.Material, err error) {
+	if t1 == -1 {
+		si, err := SimStat(db, simid)
+		if err != nil {
+			return nil, err
+		}
+		t1 = si.StartTime + si.Duration
+	}
+	filt := ""
+	if len(agents) > 0 {
+		filt += " AND cre.ModelID IN (" + strconv.Itoa(agents[0])
+		for _, a := range agents[1:] {
+			filt += "," + strconv.Itoa(a)
+		}
+		filt += ") "
+	}
+
 	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * res.Quantity) FROM (
 				Resources As res
 				INNER JOIN Compositions AS cmp ON res.StateID = cmp.ID
 				INNER JOIN ResCreators AS cre ON res.ID = cre.ResID
 			) WHERE (
 				cre.SimID = ? AND cre.SimID = res.SimID AND cre.SimID = cmp.SimID
-			) GROUP BY cmp.IsoID;`
-	return makeMaterial(db, sql, simid)
+				AND res.TimeCreated BETWEEN ? AND ?`
+	sql += filt
+	sql += `) GROUP BY cmp.IsoID;`
+	return makeMaterial(db, sql, simid, t0, t1)
 }
 
-// AllMatAt returns the simulation-global material inventory for the specified
-// sim id at time t. Use t=-1 to specify end-of-simulation.
-func AllMatAt(db *sql.DB, simid string, t int) (m nuc.Material, err error) {
+// InvAt returns the material inventory of the listed agent ids for the
+// specified sim id at time t. Passing no agents defaults to all agents. Use
+// t=-1 to specify end-of-simulation.
+func InvAt(db *sql.DB, simid string, t int, agents ...int) (m nuc.Material, err error) {
 	if t == -1 {
 		si, err := SimStat(db, simid)
 		if err != nil {
@@ -74,14 +98,23 @@ func AllMatAt(db *sql.DB, simid string, t int) (m nuc.Material, err error) {
 		}
 		t = si.StartTime + si.Duration
 	}
+	filt := ""
+	if len(agents) > 0 {
+		filt += " AND inv.AgentID IN (" + strconv.Itoa(agents[0])
+		for _, a := range agents[1:] {
+			filt += "," + strconv.Itoa(a)
+		}
+		filt += ") "
+	}
 	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * res.Quantity) FROM (
 				Resources AS res
 				INNER JOIN Compositions AS cmp ON cmp.ID = res.StateID
 				INNER JOIN Inventories AS inv ON inv.ResID = res.ID
 			) WHERE (
 				inv.SimID = ? AND inv.SimID = res.SimID AND res.SimID = cmp.SimID
-				AND inv.StartTime <= ? AND inv.EndTime > ?
-			) GROUP BY cmp.IsoID;`
+				AND inv.StartTime <= ? AND inv.EndTime > ?`
+	sql += filt
+	sql += `) GROUP BY cmp.IsoID;`
 	return makeMaterial(db, sql, simid, t, t)
 }
 
