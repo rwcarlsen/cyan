@@ -54,7 +54,7 @@ type AgentInfo struct {
 }
 
 func (ai AgentInfo) String() string {
-	return fmt.Sprintf("%v [%v:%v:%v]: parent=%v, enter=%v, exit=%v", ai.Id,
+	return fmt.Sprintf("%v %v:%v:%v: parent=%v, enter=%v, exit=%v", ai.Id,
 		ai.Type, ai.Model, ai.Proto, ai.Parent, ai.Enter, ai.Exit)
 }
 
@@ -80,6 +80,34 @@ func AllAgents(db *sql.DB, simid string) (ags []AgentInfo, err error) {
 	return ags, nil
 }
 
+func DeployCumulative(db *sql.DB, simid string, proto string) (xys []XY, err error) {
+	sql := `SELECT ti.Time,COUNT(*)
+			  FROM Agents AS ag
+			  INNER JOIN AgentDeaths AS ad ON ag.ID = ad.AgentID
+			  INNER JOIN TimeList AS ti ON ti.Time >= ag.EnterDate AND ad.DeathDate > ti.Time
+			WHERE
+			  ag.SimID = ? AND ag.SimID = ad.SimID
+			  AND ag.Prototype = ?
+			GROUP BY ti.Time
+			ORDER BY ti.Time;`
+	rows, err := db.Query(sql, simid, proto)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		xy := XY{}
+		if err := rows.Scan(&xy.X, &xy.Y); err != nil {
+			return nil, err
+		}
+		xys = append(xys, xy)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return xys, nil
+}
+
 func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
 	sql := "SELECT SimulationStart,Duration FROM SimulationTimeInfo WHERE SimID = ?"
 	rows, err := db.Query(sql, simid)
@@ -97,6 +125,38 @@ func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
 
 	si.Id = simid
 	return si, nil
+}
+
+type XY struct {
+	X int
+	Y float64
+}
+
+func InvSeries(db *sql.DB, simid string, agent int, iso int) (xys []XY, err error) {
+	sql := `SELECT ti.Time,SUM(cmp.Quantity * res.Quantity) FROM (
+				Resources AS res
+				INNER JOIN Compositions AS cmp ON cmp.ID = res.StateID
+				INNER JOIN Inventories AS inv ON inv.ResID = res.ID
+				INNER JOIN TimeList AS ti ON (ti.Time >= inv.StartTime AND ti.Time < inv.EndTime)
+			) WHERE (
+				inv.SimID = ? AND inv.SimID = res.SimID AND res.SimID = cmp.SimID
+				AND inv.AgentID = ? AND cmp.IsoID = ?
+			) GROUP BY ti.Time,cmp.IsoID;`
+	rows, err := db.Query(sql, simid, agent, iso)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		xy := XY{}
+		if err := rows.Scan(&xy.X, &xy.Y); err != nil {
+			return nil, err
+		}
+		xys = append(xys, xy)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return xys, nil
 }
 
 // MatCreated returns the total amount of material created by the listed
@@ -133,7 +193,7 @@ func MatCreated(db *sql.DB, simid string, t0, t1 int, agents ...int) (m nuc.Mate
 				INNER JOIN ResCreators AS cre ON res.ID = cre.ResID
 			) WHERE (
 				cre.SimID = ? AND cre.SimID = res.SimID AND cre.SimID = cmp.SimID
-				AND res.TimeCreated BETWEEN ? AND ?`
+				AND res.TimeCreated >= ? AND res.TimeCreated < ?`
 	sql += filt
 	sql += `) GROUP BY cmp.IsoID;`
 	return makeMaterial(db, sql, simid, t0, t1)
@@ -203,7 +263,7 @@ func Flow(db *sql.DB, simid string, t0, t1 int, fromAgents, toAgents []int) (m n
 				INNER JOIN Transactions AS tr ON tr.ID = trr.TransactionID
 			) WHERE (
 				res.SimID = ? AND trr.SimID = res.SimID AND cmp.SimID = res.SimID AND tr.SimID = res.SimID
-				AND tr.Time BETWEEN ? AND ?`
+				AND tr.Time >= ? AND tr.Time < ?`
 	sql += filt
 	sql += `) GROUP BY cmp.IsoID;`
 	return makeMaterial(db, sql, simid, t0, t1)

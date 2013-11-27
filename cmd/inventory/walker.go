@@ -15,8 +15,11 @@ const DumpFreq = 100000
 
 var (
 	preExecStmts = []string{
-		"DROP TABLE IF EXISTS Inventories",
+		"DROP TABLE IF EXISTS Inventories;",
+		"DROP TABLE IF EXISTS TimeList;",
 		"CREATE TABLE Inventories (SimID TEXT,ResID INTEGER,AgentID INTEGER,StartTime INTEGER,EndTime INTEGER);",
+		"CREATE TABLE TimeList AS SELECT DISTINCT Time FROM Transactions;",
+		query.Index("TimeList", "Time"),
 		query.Index("Resources", "SimID", "ID", "StateID"),
 		query.Index("Compositions", "SimID", "ID", "IsoID"),
 		query.Index("Transactions", "ID"),
@@ -183,7 +186,7 @@ func (c *Context) getRoots() (roots []*Node) {
 		roots = append(roots, node)
 	}
 	if err != io.EOF {
-		panic(err.Error())
+		panic(err)
 	}
 	return roots
 }
@@ -211,7 +214,7 @@ func (c *Context) walkDown(node *Node) {
 		kids = append(kids, child)
 	}
 	if err != io.EOF {
-		panic(err.Error())
+		panic(err)
 	}
 
 	// find resources owner changes (that occurred before children)
@@ -256,7 +259,7 @@ func (c *Context) getNewOwners(id int) (owners, times []int) {
 		times = append(times, t)
 	}
 	if err != io.EOF {
-		panic(err.Error())
+		panic(err)
 	}
 	return owners, times
 }

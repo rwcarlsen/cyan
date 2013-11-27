@@ -65,6 +65,10 @@ func main() {
 		doInv()
 	case "created":
 		doCreated()
+	case "invseries":
+		doInvSeries()
+	case "deployseries":
+		doDeploySeries()
 	case "flow":
 		doFlow()
 	case "test":
@@ -120,6 +124,42 @@ func doInv() {
 	m, err := query.InvAt(db, *simid, t, agents...)
 	fatalif(err)
 	fmt.Printf("%+v\n", m)
+}
+
+func doInvSeries() {
+	if flag.NArg() != 3 {
+		log.Fatal("invseries requires 3 args")
+	}
+
+	agent, err := strconv.Atoi(flag.Arg(1))
+	fatalif(err)
+	iso, err := strconv.Atoi(flag.Arg(2))
+	fatalif(err)
+
+	xys, err := query.InvSeries(db, *simid, agent, iso)
+	fatalif(err)
+
+	fmt.Printf("# Agent %v inventory of isotope %v\n", agent, iso)
+	fmt.Println("# [Timestep] [Mass (kg)]")
+	for _, xy := range xys {
+		fmt.Printf("%v %v\n", xy.X, xy.Y)
+	}
+}
+
+func doDeploySeries() {
+	if flag.NArg() != 2 {
+		log.Fatal("invseries requires 2 args")
+	}
+
+	proto := flag.Arg(1)
+	xys, err := query.DeployCumulative(db, *simid, proto)
+	fatalif(err)
+
+	fmt.Printf("# Prototype %v total active deployments\n", proto)
+	fmt.Println("# [Timestep] [Count]")
+	for _, xy := range xys {
+		fmt.Printf("%v %v\n", xy.X, xy.Y)
+	}
 }
 
 func doCreated() {
