@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -126,23 +127,71 @@ func doInv() {
 	fmt.Printf("%+v\n", m)
 }
 
+type Row struct {
+	X int
+	Ys []float64
+}
+
+type MultiSeries [][]query.XY
+
+func (ms MultiSeries) Rows() []Row {
+	rowmap := map[int]Row{}
+	xs := []int{}
+	for i, s := range ms {
+		for _, xy := range s {
+			row, ok := rowmap[xy.X]
+			if !ok {
+				xs = append(xs, xy.X)
+				row.Ys = make([]float64, len(ms))
+				row.X = xy.X
+			}
+			row.Ys[i] = xy.Y
+			rowmap[xy.X] = row
+		}
+	}
+
+	sort.Ints(xs)
+	rows := make([]Row, 0, len(rowmap))
+	for _, x := range xs {
+		rows = append(rows, rowmap[x])
+	}
+	return rows
+}
+
 func doInvSeries() {
-	if flag.NArg() != 3 {
-		log.Fatal("invseries requires 3 args")
+	if flag.NArg() < 3 {
+		log.Fatal("invseries requires at least 3 args")
 	}
 
 	agent, err := strconv.Atoi(flag.Arg(1))
 	fatalif(err)
-	iso, err := strconv.Atoi(flag.Arg(2))
-	fatalif(err)
 
-	xys, err := query.InvSeries(db, *simid, agent, iso)
-	fatalif(err)
+	isos := []int{}
+	for _, arg := range flag.Args()[2:] {
+		iso, err := strconv.Atoi(arg)
+		fatalif(err)
+		isos = append(isos, iso)
+	}
 
-	fmt.Printf("# Agent %v inventory of isotope %v\n", agent, iso)
-	fmt.Println("# [Timestep] [Mass (kg)]")
-	for _, xy := range xys {
-		fmt.Printf("%v %v\n", xy.X, xy.Y)
+	ms := MultiSeries{}
+	for _, iso := range isos {
+		xys, err := query.InvSeries(db, *simid, agent, iso)
+		ms = append(ms, xys)
+		fatalif(err)
+	}
+
+	fmt.Printf("# Agent %v inventory in kg\n", agent)
+	fmt.Printf("# [Timestep]")
+	for _, iso := range isos {
+		fmt.Printf(" [%v]", iso)
+	}
+	fmt.Printf("\n")
+	for _, row := range ms.Rows() {
+		fmt.Printf("%v", row.X)
+		for _, y := range row.Ys {
+			fmt.Printf(" %v ", y)
+		}
+		fmt.Printf("\n")
 	}
 }
 
