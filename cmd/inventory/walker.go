@@ -17,7 +17,7 @@ var (
 	preExecStmts = []string{
 		"DROP TABLE IF EXISTS Inventories;",
 		"DROP TABLE IF EXISTS TimeList;",
-		"CREATE TABLE Inventories (SimID TEXT,ResID INTEGER,AgentID INTEGER,StartTime INTEGER,EndTime INTEGER);",
+		"CREATE TABLE Inventories (SimID TEXT,ResID INTEGER,AgentID INTEGER,StartTime INTEGER,EndTime INTEGER,StateID INTEGER,Quantity REAL);",
 		"CREATE TABLE TimeList AS SELECT DISTINCT Time FROM Transactions;",
 		query.Index("TimeList", "Time"),
 		query.Index("Resources", "SimID", "ID", "StateID"),
@@ -32,15 +32,15 @@ var (
 		query.Index("Inventories", "SimID", "ResID", "StartTime"),
 		"ANALYZE;",
 	}
-	dumpSql    = "INSERT INTO Inventories VALUES (?,?,?,?,?);"
-	resSqlHead = "SELECT ID,TimeCreated FROM "
+	dumpSql    = "INSERT INTO Inventories VALUES (?,?,?,?,?,?,?);"
+	resSqlHead = "SELECT ID,TimeCreated,StateID,Quantity FROM "
 	resSqlTail = " WHERE Parent1 = ? OR Parent2 = ?;"
 
 	ownerSql = `SELECT tr.ReceiverID, tr.Time FROM Transactions AS tr
 				  INNER JOIN TransactedResources AS trr ON tr.ID = trr.TransactionID
 				  WHERE trr.ResourceID = ? AND tr.SimID = ? AND trr.SimID = ?
 				  ORDER BY tr.Time ASC;`
-	rootsSql = `SELECT res.ID,res.TimeCreated,rc.ModelID FROM Resources AS res
+	rootsSql = `SELECT res.ID,res.TimeCreated,rc.ModelID,res.StateID,Quantity FROM Resources AS res
 				  INNER JOIN ResCreators AS rc ON res.ID = rc.ResID
 				  WHERE res.SimID = ? AND rc.SimID = ?;`
 )
@@ -76,6 +76,8 @@ type Node struct {
 	OwnerId   int
 	StartTime int
 	EndTime   int
+	StateId   int
+	Quantity  float64
 }
 
 // Context encapsulates the logic for building a fast, queryable inventories
@@ -92,14 +94,12 @@ type Context struct {
 	ownerStmt   *sqlite3.Stmt
 	resCount    int
 	nodes       []*Node
-	History     chan string
 }
 
 func NewContext(conn *sqlite3.Conn, simid string, history chan string) *Context {
 	return &Context{
-		Conn:    conn,
-		Simid:   simid,
-		History: history,
+		Conn:  conn,
+		Simid: simid,
 	}
 }
 
@@ -113,7 +113,7 @@ func (c *Context) init() {
 	err := c.Exec("DROP TABLE IF EXISTS " + c.tmpResTbl)
 	panicif(err)
 
-	sql := "CREATE TABLE " + c.tmpResTbl + " AS SELECT ID,TimeCreated,Parent1,Parent2 FROM Resources WHERE SimID = ?;"
+	sql := "CREATE TABLE " + c.tmpResTbl + " AS SELECT ID,TimeCreated,Parent1,Parent2,StateID,Quantity FROM Resources WHERE SimID = ?;"
 	err = c.Exec(sql, c.Simid)
 	panicif(err)
 
@@ -142,7 +142,7 @@ func (c *Context) init() {
 func (c *Context) WalkAll() (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = r.(error)
+			err = fmt.Errorf("%v", r)
 		}
 	}()
 
@@ -180,7 +180,7 @@ func (c *Context) getRoots() (roots []*Node) {
 	roots = make([]*Node, 0, n)
 	for stmt, err = c.Query(rootsSql, c.Simid, c.Simid); err == nil; err = stmt.Next() {
 		node := &Node{EndTime: math.MaxInt32}
-		err := stmt.Scan(&node.ResId, &node.StartTime, &node.OwnerId)
+		err := stmt.Scan(&node.ResId, &node.StartTime, &node.OwnerId, &node.StateId, &node.Quantity)
 		panicif(err)
 
 		roots = append(roots, node)
@@ -208,7 +208,7 @@ func (c *Context) walkDown(node *Node) {
 	err := c.tmpResStmt.Query(node.ResId, node.ResId)
 	for ; err == nil; err = c.tmpResStmt.Next() {
 		child := &Node{EndTime: math.MaxInt32}
-		err := c.tmpResStmt.Scan(&child.ResId, &child.StartTime)
+		err := c.tmpResStmt.Scan(&child.ResId, &child.StartTime, &child.StateId, &child.Quantity)
 		panicif(err)
 		node.EndTime = child.StartTime
 		kids = append(kids, child)
@@ -231,7 +231,13 @@ func (c *Context) walkDown(node *Node) {
 		}
 		times = append(times, lastend)
 		for i := range owners {
-			n := &Node{ResId: node.ResId, OwnerId: owners[i], StartTime: times[i], EndTime: times[i+1]}
+			n := &Node{ResId: node.ResId,
+				OwnerId:   owners[i],
+				StartTime: times[i],
+				EndTime:   times[i+1],
+				StateId:   node.StateId,
+				Quantity:  node.Quantity,
+			}
 			c.nodes = append(c.nodes, n)
 		}
 	}
@@ -270,12 +276,8 @@ func (c *Context) dumpNodes() {
 	panicif(err)
 
 	for _, n := range c.nodes {
-		err = c.dumpStmt.Exec(c.Simid, n.ResId, n.OwnerId, n.StartTime, n.EndTime)
+		err = c.dumpStmt.Exec(c.Simid, n.ResId, n.OwnerId, n.StartTime, n.EndTime, n.StateId, n.Quantity)
 		panicif(err)
-		if c.History != nil {
-			sql := fmt.Sprintf("INSERT INTO Inventories VALUES('%v',%v,%v,%v,%v);", c.Simid, n.ResId, n.OwnerId, n.StartTime, n.EndTime)
-			c.History <- sql
-		}
 	}
 	err = c.Exec("END TRANSACTION;")
 	panicif(err)

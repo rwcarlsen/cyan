@@ -133,13 +133,12 @@ type XY struct {
 }
 
 func InvSeries(db *sql.DB, simid string, agent int, iso int) (xys []XY, err error) {
-	sql := `SELECT ti.Time,SUM(cmp.Quantity * res.Quantity) FROM (
-				Resources AS res
-				INNER JOIN Compositions AS cmp ON cmp.ID = res.StateID
-				INNER JOIN Inventories AS inv ON inv.ResID = res.ID
+	sql := `SELECT ti.Time,SUM(cmp.Quantity * inv.Quantity) FROM (
+				Compositions AS cmp
+				INNER JOIN Inventories AS inv ON inv.StateID = cmp.ID
 				INNER JOIN TimeList AS ti ON (ti.Time >= inv.StartTime AND ti.Time < inv.EndTime)
 			) WHERE (
-				inv.SimID = ? AND inv.SimID = res.SimID AND res.SimID = cmp.SimID
+				inv.SimID = ? AND inv.SimID = cmp.SimID
 				AND inv.AgentID = ? AND cmp.IsoID = ?
 			) GROUP BY ti.Time,cmp.IsoID;`
 	rows, err := db.Query(sql, simid, agent, iso)
@@ -219,11 +218,10 @@ func InvAt(db *sql.DB, simid string, t int, agents ...int) (m nuc.Material, err 
 		filt += ") "
 	}
 	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * res.Quantity) FROM (
-				Resources AS res
-				INNER JOIN Compositions AS cmp ON cmp.ID = res.StateID
-				INNER JOIN Inventories AS inv ON inv.ResID = res.ID
+				Inventories AS inv
+				INNER JOIN Compositions AS cmp ON inv.StateID = cmp.ID
 			) WHERE (
-				inv.SimID = ? AND inv.SimID = res.SimID AND res.SimID = cmp.SimID
+				inv.SimID = ? AND inv.SimID = cmp.SimID
 				AND inv.StartTime <= ? AND inv.EndTime > ?`
 	sql += filt
 	sql += `) GROUP BY cmp.IsoID;`

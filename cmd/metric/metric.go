@@ -160,7 +160,7 @@ func (ms MultiSeries) Rows() []Row {
 
 func doInvSeries() {
 	if flag.NArg() < 3 {
-		log.Fatal("invseries requires at least 3 args")
+		log.Fatal("invseries requires at least 2 positional args")
 	}
 
 	agent, err := strconv.Atoi(flag.Arg(1))
