@@ -22,15 +22,30 @@ var command string
 
 var db *sql.DB
 
+var cmds = NewCmdSet()
+
+func init() {
+	cmds.Register("agents", "list all agents in the simulation", doAgents)
+	cmds.Register("sims", "list all simulations in the database", doSims)
+	cmds.Register("inv", "show inventory of one or more agents at a specific timestep", doInv)
+	cmds.Register("created", "show material created by one or more agents between specific timesteps", doCreated)
+	cmds.Register("deployseries", "print a time-series of a prototype's total active deployments", doDeploySeries)
+	cmds.Register("flow", "Show total transacted material between two groups of agents between specific timesteps", doFlow)
+	cmds.Register("invseries", "print a time series of an agent's inventory for specified isotopes", doInvSeries)
+}
+
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
 
-	// global flags
 	if *help || flag.NArg() < 1 {
 		fmt.Println("Usage: metric -db <cyclus-db> [opts] <command> [args...]")
 		fmt.Println("Calculates metrics for cyclus simulation data in a sqlite database.")
 		flag.PrintDefaults()
+		fmt.Println("\nCommands:")
+		for i := range cmds.Names {
+			fmt.Printf("    - %v: %v\n", cmds.Names[i], cmds.Helps[i])
+		}
 		return
 	} else if *dbname == "" {
 		log.Fatal("must specify database with db flag")
@@ -47,82 +62,41 @@ func main() {
 		*simid = ids[0]
 	}
 
-	switch flag.Arg(0) {
-	case "sims":
-		ids, err := query.SimIds(db)
-		fatalif(err)
-		for _, id := range ids {
-			info, err := query.SimStat(db, id)
-			fatalif(err)
-			fmt.Println(info)
-		}
-	case "agents":
-		ags, err := query.AllAgents(db, *simid)
-		fatalif(err)
-		for _, a := range ags {
-			fmt.Println(a)
-		}
-	case "inv":
-		doInv()
-	case "created":
-		doCreated()
-	case "invseries":
-		doInvSeries()
-	case "deployseries":
-		doDeploySeries()
-	case "flow":
-		doFlow()
-	case "test":
-		test()
-	default:
-		log.Fatalf("unrecognized command %v", flag.Arg(0))
-	}
+	cmds.Execute(flag.Args())
 }
 
-func test() {
-	fmt.Println("running test func...")
-	sql := `SELECT ti.Time,cmp.IsoID,SUM(cmp.Quantity * res.Quantity)
-			   FROM Resources AS res
-			   INNER JOIN Inventories AS inv ON inv.ResID = res.ID
-			   INNER JOIN Compositions AS cmp ON cmp.ID = res.StateID
-			   INNER JOIN Agents AS ag ON ag.ID = inv.AgentID
-			   INNER JOIN Times AS ti ON (ti.Time >= inv.StartTime AND ti.Time < inv.EndTime)
-			WHERE
-				ag.Prototype = 'LWR_Reactor'
-				AND cmp.IsoID = 92235
-				AND res.SimID = '653de5fc-7422-41cd-b22b-557244e0756b'
-				AND cmp.SimID = res.SimID AND ag.SimID = res.SimID AND inv.SimID = res.SimID
-			GROUP BY ti.Time,cmp.IsoID;`
-	rows, err := db.Query(sql)
+func doSims(args []string) {
+	ids, err := query.SimIds(db)
 	fatalif(err)
-	var t, iso int
-	var qty float64
-	for rows.Next() {
-		rows.Scan(&t, &iso, &qty)
-		fmt.Printf("%v\t%v\t%v\n", t, iso, qty)
+	for _, id := range ids {
+		info, err := query.SimStat(db, id)
+		fatalif(err)
+		fmt.Println(info)
 	}
-	fatalif(rows.Err())
 }
 
-func doInv() {
-	var err error
-	t := -1
-	var agents []int
+func doAgents(args []string) {
+	ags, err := query.AllAgents(db, *simid)
+	fatalif(err)
+	for _, a := range ags {
+		fmt.Println(a)
+	}
+}
 
-	switch n := flag.NArg(); {
-	case n == 2:
-		t, err = strconv.Atoi(flag.Arg(1))
+func doInv(args []string) {
+	fs := flag.NewFlagSet("inv", flag.ExitOnError)
+	t := fs.Int("t", -1, "timestep of inventory (-1 = end of simulation)")
+	fs.Usage = func() {log.Print("Usage: inv [agent-id...]\nZero agents uses all agent inventories"); fs.PrintDefaults()}
+	fs.Parse(args)
+
+	var agents []int
+	for _, arg := range fs.Args() {
+		id, err := strconv.Atoi(arg)
 		fatalif(err)
-		fallthrough
-	case n > 2:
-		for _, arg := range flag.Args()[2:] {
-			id, err := strconv.Atoi(arg)
-			fatalif(err)
-			agents = append(agents, id)
-		}
+		agents = append(agents, id)
 	}
 
-	m, err := query.InvAt(db, *simid, t, agents...)
+	m, err := query.InvAt(db, *simid, *t, agents...)
 	fatalif(err)
 	fmt.Printf("%+v\n", m)
 }
@@ -158,16 +132,20 @@ func (ms MultiSeries) Rows() []Row {
 	return rows
 }
 
-func doInvSeries() {
-	if flag.NArg() < 3 {
-		log.Fatal("invseries requires at least 2 positional args")
+func doInvSeries(args []string) {
+	fs := flag.NewFlagSet("invseries", flag.ExitOnError)
+	fs.Usage = func() {log.Print("Usage: invseries <agent-id> <isotope> [isotope...]"); fs.PrintDefaults()}
+	fs.Parse(args)
+	if fs.NArg() < 2 {
+		fs.Usage()
+		return
 	}
 
-	agent, err := strconv.Atoi(flag.Arg(1))
+	agent, err := strconv.Atoi(fs.Arg(0))
 	fatalif(err)
 
 	isos := []int{}
-	for _, arg := range flag.Args()[2:] {
+	for _, arg := range fs.Args()[1:] {
 		iso, err := strconv.Atoi(arg)
 		fatalif(err)
 		isos = append(isos, iso)
@@ -195,12 +173,16 @@ func doInvSeries() {
 	}
 }
 
-func doDeploySeries() {
-	if flag.NArg() != 2 {
-		log.Fatal("invseries requires 2 args")
+func doDeploySeries(args []string) {
+	fs := flag.NewFlagSet("deployseries", flag.ExitOnError)
+	fs.Usage = func() {log.Print("Usage: deployseries <prototype>"); fs.PrintDefaults()}
+	fs.Parse(args)
+	if fs.NArg() < 1 {
+		fs.Usage()
+		return
 	}
 
-	proto := flag.Arg(1)
+	proto := fs.Arg(0)
 	xys, err := query.DeployCumulative(db, *simid, proto)
 	fatalif(err)
 
@@ -211,47 +193,40 @@ func doDeploySeries() {
 	}
 }
 
-func doCreated() {
-	var err error
-	t0, t1 := -1, -1
+func doCreated(args []string) {
+	fs := flag.NewFlagSet("created", flag.ExitOnError)
+	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
+	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
+	fs.Usage = func() {log.Print("Usage: created [agent-id...]\nZero agents uses all agents"); fs.PrintDefaults()}
+	fs.Parse(args)
+
 	var agents []int
 
-	switch n := flag.NArg(); {
-	case n == 2:
-		t0, err = strconv.Atoi(flag.Arg(1))
+	for _, arg := range fs.Args() {
+		id, err := strconv.Atoi(arg)
 		fatalif(err)
-		fallthrough
-	case n == 3:
-		t1, err = strconv.Atoi(flag.Arg(2))
-		fatalif(err)
-		fallthrough
-	case n > 3:
-		for _, arg := range flag.Args()[3:] {
-			id, err := strconv.Atoi(arg)
-			fatalif(err)
-			agents = append(agents, id)
-		}
+		agents = append(agents, id)
 	}
 
-	m, err := query.MatCreated(db, *simid, t0, t1, agents...)
+	m, err := query.MatCreated(db, *simid, *t0, *t1, agents...)
 	fatalif(err)
 	fmt.Printf("%+v\n", m)
 }
 
-func doFlow() {
-	var err error
-	t0, t1 := -1, -1
+func doFlow(args []string) {
+	fs := flag.NewFlagSet("created", flag.ExitOnError)
+	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
+	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
+	fs.Usage = func() {log.Print("Usage: flow <from-agents...> .. <to-agents...>\nZero agents uses all agents"); fs.PrintDefaults()}
+	fs.Parse(args)
+
 	var from []int
 	var to []int
 
-	if flag.NArg() < 6 {
-		log.Fatal("need 4 args for flow: <t0> <t1> <fromAgents...> .. <toAgents...>")
+	if flag.NArg() < 3 {
+		fs.Usage()
+		return
 	}
-
-	t0, err = strconv.Atoi(flag.Arg(1))
-	fatalif(err)
-	t1, err = strconv.Atoi(flag.Arg(2))
-	fatalif(err)
 
 	before := true
 	for _, arg := range flag.Args()[3:] {
@@ -269,10 +244,11 @@ func doFlow() {
 		}
 	}
 	if len(to) < 1 {
-		log.Fatal("no receiving agents specified. Use <fromAgents> .. <toAgents>")
+		fs.Usage()
+		return
 	}
 
-	m, err := query.Flow(db, *simid, t0, t1, from, to)
+	m, err := query.Flow(db, *simid, *t0, *t1, from, to)
 	fatalif(err)
 	fmt.Printf("%+v\n", m)
 }
@@ -282,3 +258,29 @@ func fatalif(err error) {
 		log.Fatal(err)
 	}
 }
+
+type CmdSet struct {
+	funcs map[string]func([]string)
+	Names []string
+	Helps []string
+}
+
+func NewCmdSet() *CmdSet {
+	return &CmdSet{funcs: map[string]func([]string){}}
+}
+
+func (cs *CmdSet) Register(name, brief string, f func([]string)) {
+	cs.Names = append(cs.Names, name)
+	cs.Helps = append(cs.Helps, brief)
+	cs.funcs[name] = f
+}
+
+func (cs *CmdSet) Execute(args []string) {
+	cmd := args[0]
+	f, ok := cs.funcs[cmd]
+	if !ok {
+		log.Fatalf("Invalid command '%v'", cmd)
+	}
+	f(args[1:])
+}
+

@@ -217,7 +217,7 @@ func InvAt(db *sql.DB, simid string, t int, agents ...int) (m nuc.Material, err 
 		}
 		filt += ") "
 	}
-	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * res.Quantity) FROM (
+	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * inv.Quantity) FROM (
 				Inventories AS inv
 				INNER JOIN Compositions AS cmp ON inv.StateID = cmp.ID
 			) WHERE (
@@ -227,7 +227,46 @@ func InvAt(db *sql.DB, simid string, t int, agents ...int) (m nuc.Material, err 
 	sql += `) GROUP BY cmp.IsoID;`
 	return makeMaterial(db, sql, simid, t, t)
 }
-
+//
+//func FlowGraph(db *sql.DB, simid string, t0, t1 int, groupByProto bool) (m nuc.Material, err error) {
+//	if t0 == -1 {
+//		si, err := SimStat(db, simid)
+//		if err != nil {
+//			return nil, err
+//		}
+//		t0 = si.StartTime
+//	}
+//	if t1 == -1 {
+//		si, err := SimStat(db, simid)
+//		if err != nil {
+//			return nil, err
+//		}
+//		t1 = si.StartTime + si.Duration
+//	}
+//	filt := " AND tr.SenderID IN (" + strconv.Itoa(fromAgents[0])
+//	for _, a := range fromAgents[1:] {
+//		filt += "," + strconv.Itoa(a)
+//	}
+//	filt += ") "
+//	filt += " AND tr.ReceiverID IN (" + strconv.Itoa(toAgents[0])
+//	for _, a := range toAgents[1:] {
+//		filt += "," + strconv.Itoa(a)
+//	}
+//	filt += ") "
+//
+//	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * res.Quantity) FROM (
+//				Resources AS res
+//				INNER JOIN TransactedResources AS trr ON res.ID = trr.ResourceID
+//				INNER JOIN Compositions AS cmp ON cmp.ID = res.StateID
+//				INNER JOIN Transactions AS tr ON tr.ID = trr.TransactionID
+//			) WHERE (
+//				res.SimID = ? AND trr.SimID = res.SimID AND cmp.SimID = res.SimID AND tr.SimID = res.SimID
+//				AND tr.Time >= ? AND tr.Time < ?`
+//	sql += filt
+//	sql += `) GROUP BY cmp.IsoID;`
+//	return makeMaterial(db, sql, simid, t0, t1)
+//}
+//
 func Flow(db *sql.DB, simid string, t0, t1 int, fromAgents, toAgents []int) (m nuc.Material, err error) {
 	if t0 == -1 {
 		si, err := SimStat(db, simid)
