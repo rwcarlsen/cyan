@@ -22,6 +22,7 @@ var (
 		query.Index("TimeList", "Time"),
 		query.Index("Resources", "SimID", "ID", "StateID"),
 		query.Index("Compositions", "SimID", "ID", "IsoID"),
+		query.Index("Transactions", "SimID", "ResourceID"),
 		query.Index("Transactions", "ID"),
 		query.Index("ResCreators", "SimID", "ResID"),
 		query.Index("Agents", "SimID", "Prototype"),
