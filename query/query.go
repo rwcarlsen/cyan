@@ -227,46 +227,72 @@ func InvAt(db *sql.DB, simid string, t int, agents ...int) (m nuc.Material, err 
 	sql += `) GROUP BY cmp.IsoID;`
 	return makeMaterial(db, sql, simid, t, t)
 }
-//
-//func FlowGraph(db *sql.DB, simid string, t0, t1 int, groupByProto bool) (m nuc.Material, err error) {
-//	if t0 == -1 {
-//		si, err := SimStat(db, simid)
-//		if err != nil {
-//			return nil, err
-//		}
-//		t0 = si.StartTime
-//	}
-//	if t1 == -1 {
-//		si, err := SimStat(db, simid)
-//		if err != nil {
-//			return nil, err
-//		}
-//		t1 = si.StartTime + si.Duration
-//	}
-//	filt := " AND tr.SenderID IN (" + strconv.Itoa(fromAgents[0])
-//	for _, a := range fromAgents[1:] {
-//		filt += "," + strconv.Itoa(a)
-//	}
-//	filt += ") "
-//	filt += " AND tr.ReceiverID IN (" + strconv.Itoa(toAgents[0])
-//	for _, a := range toAgents[1:] {
-//		filt += "," + strconv.Itoa(a)
-//	}
-//	filt += ") "
-//
-//	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * res.Quantity) FROM (
-//				Resources AS res
-//				INNER JOIN TransactedResources AS trr ON res.ID = trr.ResourceID
-//				INNER JOIN Compositions AS cmp ON cmp.ID = res.StateID
-//				INNER JOIN Transactions AS tr ON tr.ID = trr.TransactionID
-//			) WHERE (
-//				res.SimID = ? AND trr.SimID = res.SimID AND cmp.SimID = res.SimID AND tr.SimID = res.SimID
-//				AND tr.Time >= ? AND tr.Time < ?`
-//	sql += filt
-//	sql += `) GROUP BY cmp.IsoID;`
-//	return makeMaterial(db, sql, simid, t0, t1)
-//}
-//
+
+type FlowArc struct {
+	Src      string
+	Dst      string
+	Commod   string
+	Quantity float64
+}
+
+func FlowGraph(db *sql.DB, simid string, t0, t1 int, groupByProto bool) (arcs []FlowArc, err error) {
+	if t0 == -1 {
+		si, err := SimStat(db, simid)
+		if err != nil {
+			return nil, err
+		}
+		t0 = si.StartTime
+	}
+	if t1 == -1 {
+		si, err := SimStat(db, simid)
+		if err != nil {
+			return nil, err
+		}
+		t1 = si.StartTime + si.Duration
+	}
+
+	var sql string
+	if !groupByProto {
+		sql = `SELECT snd.Prototype || " " || tr.SenderID,rcv.Prototype || " " || tr.ReceiverID,tr.Commodity,SUM(res.Quantity) FROM (
+					Resources AS res
+					INNER JOIN TransactedResources AS trr ON res.ID = trr.ResourceID
+					INNER JOIN Transactions AS tr ON tr.ID = trr.TransactionID
+					INNER JOIN Agents AS snd ON snd.ID = tr.SenderID
+					INNER JOIN Agents AS rcv ON rcv.ID = tr.ReceiverID
+				) WHERE (
+					res.SimID = ? AND trr.SimID = res.SimID AND tr.SimID = res.SimID
+					AND tr.Time >= ? AND tr.Time < ?
+				) GROUP BY tr.SenderID,tr.ReceiverID,tr.Commodity;`
+	} else {
+		sql = `SELECT snd.Prototype,rcv.Prototype,tr.Commodity,SUM(res.Quantity) FROM (
+					Resources AS res
+					INNER JOIN TransactedResources AS trr ON res.ID = trr.ResourceID
+					INNER JOIN Transactions AS tr ON tr.ID = trr.TransactionID
+					INNER JOIN Agents AS snd ON snd.ID = tr.SenderID
+					INNER JOIN Agents AS rcv ON rcv.ID = tr.ReceiverID
+				) WHERE (
+					res.SimID = ? AND trr.SimID = res.SimID AND tr.SimID = res.SimID
+					AND tr.Time >= ? AND tr.Time < ?
+				) GROUP BY snd.Prototype,rcv.Prototype,tr.Commodity;`
+	}
+
+	rows, err := db.Query(sql, simid, t0, t1)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		arc := FlowArc{}
+		if err := rows.Scan(&arc.Src, &arc.Dst, &arc.Commod, &arc.Quantity); err != nil {
+			return nil, err
+		}
+		arcs = append(arcs, arc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return arcs, nil
+}
+
 func Flow(db *sql.DB, simid string, t0, t1 int, fromAgents, toAgents []int) (m nuc.Material, err error) {
 	if t0 == -1 {
 		si, err := SimStat(db, simid)

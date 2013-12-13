@@ -1,11 +1,11 @@
 package main
 
 import (
-	"sort"
 	"database/sql"
 	"flag"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 
 	_ "code.google.com/p/go-sqlite/go1/sqlite3"
@@ -32,6 +32,7 @@ func init() {
 	cmds.Register("deployseries", "print a time-series of a prototype's total active deployments", doDeploySeries)
 	cmds.Register("flow", "Show total transacted material between two groups of agents between specific timesteps", doFlow)
 	cmds.Register("invseries", "print a time series of an agent's inventory for specified isotopes", doInvSeries)
+	cmds.Register("flowgraph", "print a graphviz dot graph of resource arcs between facilities", doFlowGraph)
 }
 
 func main() {
@@ -86,7 +87,10 @@ func doAgents(args []string) {
 func doInv(args []string) {
 	fs := flag.NewFlagSet("inv", flag.ExitOnError)
 	t := fs.Int("t", -1, "timestep of inventory (-1 = end of simulation)")
-	fs.Usage = func() {log.Print("Usage: inv [agent-id...]\nZero agents uses all agent inventories"); fs.PrintDefaults()}
+	fs.Usage = func() {
+		log.Print("Usage: inv [agent-id...]\nZero agents uses all agent inventories")
+		fs.PrintDefaults()
+	}
 	fs.Parse(args)
 
 	var agents []int
@@ -102,7 +106,7 @@ func doInv(args []string) {
 }
 
 type Row struct {
-	X int
+	X  int
 	Ys []float64
 }
 
@@ -134,7 +138,7 @@ func (ms MultiSeries) Rows() []Row {
 
 func doInvSeries(args []string) {
 	fs := flag.NewFlagSet("invseries", flag.ExitOnError)
-	fs.Usage = func() {log.Print("Usage: invseries <agent-id> <isotope> [isotope...]"); fs.PrintDefaults()}
+	fs.Usage = func() { log.Print("Usage: invseries <agent-id> <isotope> [isotope...]"); fs.PrintDefaults() }
 	fs.Parse(args)
 	if fs.NArg() < 2 {
 		fs.Usage()
@@ -173,9 +177,27 @@ func doInvSeries(args []string) {
 	}
 }
 
+func doFlowGraph(args []string) {
+	fs := flag.NewFlagSet("flowgraph", flag.ExitOnError)
+	fs.Usage = func() { log.Print("Usage: flowgraph"); fs.PrintDefaults() }
+	proto := fs.Bool("proto", false, "aggregate nodes by prototype")
+	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
+	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
+	fs.Parse(args)
+
+	arcs, err := query.FlowGraph(db, *simid, *t0, *t1, *proto)
+	fatalif(err)
+
+	fmt.Println("digraph ResourceFlows {")
+	for _, arc := range arcs {
+		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v (%v kg)\", fontsize=8];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity)
+	}
+	fmt.Println("}")
+}
+
 func doDeploySeries(args []string) {
 	fs := flag.NewFlagSet("deployseries", flag.ExitOnError)
-	fs.Usage = func() {log.Print("Usage: deployseries <prototype>"); fs.PrintDefaults()}
+	fs.Usage = func() { log.Print("Usage: deployseries <prototype>"); fs.PrintDefaults() }
 	fs.Parse(args)
 	if fs.NArg() < 1 {
 		fs.Usage()
@@ -195,9 +217,9 @@ func doDeploySeries(args []string) {
 
 func doCreated(args []string) {
 	fs := flag.NewFlagSet("created", flag.ExitOnError)
+	fs.Usage = func() { log.Print("Usage: created [agent-id...]\nZero agents uses all agents"); fs.PrintDefaults() }
 	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
 	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
-	fs.Usage = func() {log.Print("Usage: created [agent-id...]\nZero agents uses all agents"); fs.PrintDefaults()}
 	fs.Parse(args)
 
 	var agents []int
@@ -217,7 +239,10 @@ func doFlow(args []string) {
 	fs := flag.NewFlagSet("created", flag.ExitOnError)
 	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
 	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
-	fs.Usage = func() {log.Print("Usage: flow <from-agents...> .. <to-agents...>\nZero agents uses all agents"); fs.PrintDefaults()}
+	fs.Usage = func() {
+		log.Print("Usage: flow <from-agents...> .. <to-agents...>\nZero agents uses all agents")
+		fs.PrintDefaults()
+	}
 	fs.Parse(args)
 
 	var from []int
@@ -283,4 +308,3 @@ func (cs *CmdSet) Execute(args []string) {
 	}
 	f(args[1:])
 }
-
