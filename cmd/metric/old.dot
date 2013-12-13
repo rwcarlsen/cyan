@@ -1,0 +1,15 @@
+digraph ResourceFlows {
+    overlap = false;
+    nodesep=1.0;
+    edge [fontsize=9];
+    "Enrichment" -> "HWR_Reactor" [label="enriched_u
+(1.65e+09 kg)"];
+    "Enrichment" -> "LWR_Reactor" [label="enriched_u
+(1.85e+08 kg)"];
+    "HWR_Reactor" -> "Sink" [label="waste
+(1.6e+09 kg)"];
+    "LWR_Reactor" -> "Sink" [label="waste
+(6.87e+07 kg)"];
+    "Source" -> "Enrichment" [label="natl_u
+(1.1e+13 kg)"];
+}
