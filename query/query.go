@@ -43,6 +43,25 @@ func (si SimInfo) String() string {
 		si.StartTime, si.StartTime+si.Duration, si.DecayPeriod)
 }
 
+func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
+	sql := "SELECT SimulationStart,Duration FROM SimulationTimeInfo WHERE SimID = ?"
+	rows, err := db.Query(sql, simid)
+	if err != nil {
+		return si, err
+	}
+	for rows.Next() {
+		if err := rows.Scan(&si.StartTime, &si.Duration); err != nil {
+			return si, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return si, err
+	}
+
+	si.Id = simid
+	return si, nil
+}
+
 type AgentInfo struct {
 	Id     int
 	Type   string
@@ -106,25 +125,6 @@ func DeployCumulative(db *sql.DB, simid string, proto string) (xys []XY, err err
 		return nil, err
 	}
 	return xys, nil
-}
-
-func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
-	sql := "SELECT SimulationStart,Duration FROM SimulationTimeInfo WHERE SimID = ?"
-	rows, err := db.Query(sql, simid)
-	if err != nil {
-		return si, err
-	}
-	for rows.Next() {
-		if err := rows.Scan(&si.StartTime, &si.Duration); err != nil {
-			return si, err
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return si, err
-	}
-
-	si.Id = simid
-	return si, nil
 }
 
 type XY struct {
@@ -255,23 +255,21 @@ func FlowGraph(db *sql.DB, simid string, t0, t1 int, groupByProto bool) (arcs []
 	if !groupByProto {
 		sql = `SELECT snd.Prototype || " " || tr.SenderID,rcv.Prototype || " " || tr.ReceiverID,tr.Commodity,SUM(res.Quantity) FROM (
 					Resources AS res
-					INNER JOIN TransactedResources AS trr ON res.ID = trr.ResourceID
-					INNER JOIN Transactions AS tr ON tr.ID = trr.TransactionID
+					INNER JOIN Transactions AS tr ON tr.ResourceID = res.ID
 					INNER JOIN Agents AS snd ON snd.ID = tr.SenderID
 					INNER JOIN Agents AS rcv ON rcv.ID = tr.ReceiverID
 				) WHERE (
-					res.SimID = ? AND trr.SimID = res.SimID AND tr.SimID = res.SimID
+					res.SimID = ? AND tr.SimID = res.SimID
 					AND tr.Time >= ? AND tr.Time < ?
 				) GROUP BY tr.SenderID,tr.ReceiverID,tr.Commodity;`
 	} else {
 		sql = `SELECT snd.Prototype,rcv.Prototype,tr.Commodity,SUM(res.Quantity) FROM (
 					Resources AS res
-					INNER JOIN TransactedResources AS trr ON res.ID = trr.ResourceID
-					INNER JOIN Transactions AS tr ON tr.ID = trr.TransactionID
+					INNER JOIN Transactions AS tr ON tr.ResourceID = res.ID
 					INNER JOIN Agents AS snd ON snd.ID = tr.SenderID
 					INNER JOIN Agents AS rcv ON rcv.ID = tr.ReceiverID
 				) WHERE (
-					res.SimID = ? AND trr.SimID = res.SimID AND tr.SimID = res.SimID
+					res.SimID = ? AND tr.SimID = res.SimID
 					AND tr.Time >= ? AND tr.Time < ?
 				) GROUP BY snd.Prototype,rcv.Prototype,tr.Commodity;`
 	}
@@ -321,11 +319,10 @@ func Flow(db *sql.DB, simid string, t0, t1 int, fromAgents, toAgents []int) (m n
 
 	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * res.Quantity) FROM (
 				Resources AS res
-				INNER JOIN TransactedResources AS trr ON res.ID = trr.ResourceID
 				INNER JOIN Compositions AS cmp ON cmp.ID = res.StateID
-				INNER JOIN Transactions AS tr ON tr.ID = trr.TransactionID
+				INNER JOIN Transactions AS tr ON tr.ResourceID = res.ID
 			) WHERE (
-				res.SimID = ? AND trr.SimID = res.SimID AND cmp.SimID = res.SimID AND tr.SimID = res.SimID
+				res.SimID = ? AND cmp.SimID = res.SimID AND tr.SimID = res.SimID
 				AND tr.Time >= ? AND tr.Time < ?`
 	sql += filt
 	sql += `) GROUP BY cmp.IsoID;`

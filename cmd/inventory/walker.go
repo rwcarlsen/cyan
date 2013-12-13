@@ -23,7 +23,6 @@ var (
 		query.Index("Resources", "SimID", "ID", "StateID"),
 		query.Index("Compositions", "SimID", "ID", "IsoID"),
 		query.Index("Transactions", "ID"),
-		query.Index("TransactedResources", "SimID", "ResourceID", "TransactionID"),
 		query.Index("ResCreators", "SimID", "ResID"),
 		query.Index("Agents", "SimID", "Prototype"),
 	}
@@ -37,8 +36,7 @@ var (
 	resSqlTail = " WHERE Parent1 = ? OR Parent2 = ?;"
 
 	ownerSql = `SELECT tr.ReceiverID, tr.Time FROM Transactions AS tr
-				  INNER JOIN TransactedResources AS trr ON tr.ID = trr.TransactionID
-				  WHERE trr.ResourceID = ? AND tr.SimID = ? AND trr.SimID = ?
+				  WHERE tr.ResourceID = ? AND tr.SimID = ?
 				  ORDER BY tr.Time ASC;`
 	rootsSql = `SELECT res.ID,res.TimeCreated,rc.ModelID,res.StateID,Quantity FROM Resources AS res
 				  INNER JOIN ResCreators AS rc ON res.ID = rc.ResID
@@ -253,7 +251,7 @@ func (c *Context) walkDown(node *Node) {
 
 func (c *Context) getNewOwners(id int) (owners, times []int) {
 	var owner, t int
-	err := c.ownerStmt.Query(id, c.Simid, c.Simid)
+	err := c.ownerStmt.Query(id, c.Simid)
 	for ; err == nil; err = c.ownerStmt.Next() {
 		err := c.ownerStmt.Scan(&owner, &t)
 		panicif(err)

@@ -193,7 +193,7 @@ func doFlowGraph(args []string) {
 	fmt.Println("    nodesep=1.0;")
 	fmt.Println("    edge [fontsize=9];")
 	for _, arc := range arcs {
-		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v\n(%.3g kg)\"];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity)
+		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v\\n(%.3g kg)\"];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity)
 	}
 	fmt.Println("}")
 }
