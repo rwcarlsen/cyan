@@ -189,8 +189,11 @@ func doFlowGraph(args []string) {
 	fatalif(err)
 
 	fmt.Println("digraph ResourceFlows {")
+	fmt.Println("    overlap = false;")
+	fmt.Println("    nodesep=1.0;")
+	fmt.Println("    edge [fontsize=9];")
 	for _, arc := range arcs {
-		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v (%v kg)\", fontsize=8];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity)
+		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v\n(%.3g kg)\"];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity)
 	}
 	fmt.Println("}")
 }
