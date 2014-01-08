@@ -300,7 +300,7 @@ func doFlow(cmd string, args []string) {
 	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
 	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
 	fs.Usage = func() {
-		log.Print("Usage: flow <from-agents...> .. <to-agents...>\nZero agents uses all agents")
+		log.Print("Usage: flow <from-agents...> .. <to-agents...>")
 		fs.PrintDefaults()
 	}
 	fs.Parse(args)
@@ -314,7 +314,7 @@ func doFlow(cmd string, args []string) {
 	}
 
 	before := true
-	for _, arg := range flag.Args()[3:] {
+	for _, arg := range args {
 		if arg == ".." {
 			before = false
 			continue
