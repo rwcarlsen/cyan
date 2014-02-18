@@ -15,33 +15,33 @@ const DumpFreq = 100000
 
 var (
 	preExecStmts = []string{
-		"DROP TABLE IF EXISTS Inventories;",
 		"DROP TABLE IF EXISTS TimeList;",
-		"CREATE TABLE Inventories (SimID TEXT,ResID INTEGER,AgentID INTEGER,StartTime INTEGER,EndTime INTEGER,StateID INTEGER,Quantity REAL);",
+		"CREATE TABLE IF NOT EXISTS Agents (SimId TEXT,Kind TEXT,Implementation TEXT,Prototype TEXT,ParentId INTEGER,EnterTime INTEGER,ExitTime INTEGER);",
+		"CREATE TABLE IF NOT EXISTS Inventories (SimId TEXT,ResourceId INTEGER,AgentId INTEGER,StartTime INTEGER,EndTime INTEGER,StateId INTEGER,Quantity REAL);",
 		"CREATE TABLE TimeList AS SELECT DISTINCT Time FROM Transactions;",
 		query.Index("TimeList", "Time"),
-		query.Index("Resources", "SimID", "ID", "StateID"),
-		query.Index("Compositions", "SimID", "ID", "IsoID"),
-		query.Index("Transactions", "SimID", "ResourceID"),
-		query.Index("Transactions", "ID"),
-		query.Index("ResCreators", "SimID", "ResID"),
-		query.Index("Agents", "SimID", "Prototype"),
+		query.Index("Resources", "SimId", "ResourceId", "StateId"),
+		query.Index("Compositions", "SimId", "StateId", "NucId"),
+		query.Index("Transactions", "SimId", "ResourceId"),
+		query.Index("Transactions", "TransactionId"),
+		query.Index("ResCreators", "SimId", "ResourceId"),
 	}
 	postExecStmts = []string{
-		query.Index("Inventories", "SimID", "AgentID"),
-		query.Index("Inventories", "SimID", "ResID", "StartTime"),
+		query.Index("Agents", "SimId", "Prototype"),
+		query.Index("Inventories", "SimId", "AgentId"),
+		query.Index("Inventories", "SimId", "ResourceId", "StartTime"),
 		"ANALYZE;",
 	}
 	dumpSql    = "INSERT INTO Inventories VALUES (?,?,?,?,?,?,?);"
-	resSqlHead = "SELECT ID,TimeCreated,StateID,Quantity FROM "
+	resSqlHead = "SELECT ResourceId,TimeCreated,StateId,Quantity FROM "
 	resSqlTail = " WHERE Parent1 = ? OR Parent2 = ?;"
 
-	ownerSql = `SELECT tr.ReceiverID, tr.Time FROM Transactions AS tr
-				  WHERE tr.ResourceID = ? AND tr.SimID = ?
+	ownerSql = `SELECT tr.ReceiverId, tr.Time FROM Transactions AS tr
+				  WHERE tr.ResourceId = ? AND tr.SimId = ?
 				  ORDER BY tr.Time ASC;`
-	rootsSql = `SELECT res.ID,res.TimeCreated,rc.ModelID,res.StateID,Quantity FROM Resources AS res
-				  INNER JOIN ResCreators AS rc ON res.ID = rc.ResID
-				  WHERE res.SimID = ? AND rc.SimID = ?;`
+	rootsSql = `SELECT res.ResourceId,res.TimeCreated,rc.AgentId,res.StateId,Quantity FROM Resources AS res
+				  INNER JOIN ResCreators AS rc ON res.ResourceId = rc.ResourceId
+				  WHERE res.SimId = ? AND rc.SimId = ?;`
 )
 
 // Prepare creates necessary indexes and tables required for efficient
@@ -103,16 +103,35 @@ func NewContext(conn *sqlite3.Conn, simid string, history chan string) *Context 
 }
 
 func (c *Context) init() {
+	// skip if the post processing already exists for this simid in the db
+	_, err := c.Query("SELECT * FROM Inventories WHERE SimId = ? LIMIT 1", c.Simid)
+	if err == nil {
+		panic(fmt.Errorf("SimId %v is already post-processed. Skipping.\n", c.Simid))
+	} else if err != io.EOF {
+		panicif(err)
+	}
+
+	// build Agents table
+	sql := `INSERT INTO Agents
+				SELECT n.SimId,n.Kind,n.Implementation,n.Prototype,n.ParentId,n.EnterTime,x.ExitTime
+				FROM
+					AgentEntry AS n
+					INNER JOIN AgentExit AS x ON n.AgentId = x.AgentId
+				WHERE
+					n.SimId = x.SimId AND n.SimId = ?;`
+	err = c.Exec(sql, c.Simid)
+	panicif(err)
+
 	c.nodes = make([]*Node, 0, 10000)
 	c.mappednodes = map[int32]struct{}{}
 
 	// create temp res table without simid
 	fmt.Println("Creating temporary resource table...")
 	c.tmpResTbl = "tmp_restbl_" + strings.Replace(c.Simid, "-", "_", -1)
-	err := c.Exec("DROP TABLE IF EXISTS " + c.tmpResTbl)
+	err = c.Exec("DROP TABLE IF EXISTS " + c.tmpResTbl)
 	panicif(err)
 
-	sql := "CREATE TABLE " + c.tmpResTbl + " AS SELECT ID,TimeCreated,Parent1,Parent2,StateID,Quantity FROM Resources WHERE SimID = ?;"
+	sql = "CREATE TABLE " + c.tmpResTbl + " AS SELECT ResourceId,TimeCreated,Parent1,Parent2,StateId,Quantity FROM Resources WHERE SimId = ?;"
 	err = c.Exec(sql, c.Simid)
 	panicif(err)
 
@@ -167,7 +186,7 @@ func (c *Context) WalkAll() (err error) {
 }
 
 func (c *Context) getRoots() (roots []*Node) {
-	sql := "SELECT COUNT(*) FROM ResCreators WHERE SimID = ?"
+	sql := "SELECT COUNT(*) FROM ResCreators WHERE SimId = ?"
 	stmt, err := c.Query(sql, c.Simid)
 	panicif(err)
 
