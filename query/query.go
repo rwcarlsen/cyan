@@ -12,7 +12,7 @@ import (
 // SimIds returns a list of all simulation ids in the cyclus database for
 // conn.
 func SimIds(db *sql.DB) (ids []string, err error) {
-	sql := "SELECT SimID FROM SimulationTimeInfo"
+	sql := "SELECT SimId FROM SimulationTimeInfo"
 	rows, err := db.Query(sql)
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func (si SimInfo) String() string {
 }
 
 func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
-	sql := "SELECT SimulationStart,Duration FROM SimulationTimeInfo WHERE SimID = ?"
+	sql := "SELECT SimulationStart,Duration FROM SimulationTimeInfo WHERE SimId = ?"
 	rows, err := db.Query(sql, simid)
 	if err != nil {
 		return si, err
@@ -78,9 +78,9 @@ func (ai AgentInfo) String() string {
 }
 
 func AllAgents(db *sql.DB, simid string) (ags []AgentInfo, err error) {
-	sql := `SELECT ID,AgentType,ModelType,Prototype,ParentID,EnterDate,DeathDate FROM
-				Agents INNER JOIN AgentDeaths ON Agents.ID = AgentDeaths.AgentID
-			WHERE Agents.SimID = ? AND Agents.SimID = AgentDeaths.SimID;`
+	sql := `SELECT AgentId,Kind,Implementation,Prototype,ParentId,EnterTime,ExitTime FROM
+				Agents
+			WHERE Agents.SimId = ?;`
 	rows, err := db.Query(sql, simid)
 	if err != nil {
 		return nil, err
@@ -102,10 +102,9 @@ func AllAgents(db *sql.DB, simid string) (ags []AgentInfo, err error) {
 func DeployCumulative(db *sql.DB, simid string, proto string) (xys []XY, err error) {
 	sql := `SELECT ti.Time,COUNT(*)
 			  FROM Agents AS ag
-			  INNER JOIN AgentDeaths AS ad ON ag.ID = ad.AgentID
-			  INNER JOIN TimeList AS ti ON ti.Time >= ag.EnterDate AND ad.DeathDate > ti.Time
+			  INNER JOIN TimeList AS ti ON ti.Time >= ag.EnterTime AND ag.ExitTime > ti.Time
 			WHERE
-			  ag.SimID = ? AND ag.SimID = ad.SimID
+			  ag.SimId = ?
 			  AND ag.Prototype = ?
 			GROUP BY ti.Time
 			ORDER BY ti.Time;`
@@ -133,14 +132,14 @@ type XY struct {
 }
 
 func InvSeries(db *sql.DB, simid string, agent int, iso int) (xys []XY, err error) {
-	sql := `SELECT ti.Time,SUM(cmp.Quantity * inv.Quantity) FROM (
+	sql := `SELECT ti.Time,SUM(cmp.MassFrac * inv.Quantity) FROM (
 				Compositions AS cmp
-				INNER JOIN Inventories AS inv ON inv.StateID = cmp.ID
+				INNER JOIN Inventories AS inv ON inv.StateId = cmp.StateId
 				INNER JOIN TimeList AS ti ON (ti.Time >= inv.StartTime AND ti.Time < inv.EndTime)
 			) WHERE (
-				inv.SimID = ? AND inv.SimID = cmp.SimID
-				AND inv.AgentID = ? AND cmp.IsoID = ?
-			) GROUP BY ti.Time,cmp.IsoID;`
+				inv.SimId = ? AND inv.SimId = cmp.SimId
+				AND inv.AgentId = ? AND cmp.NucId = ?
+			) GROUP BY ti.Time,cmp.NucId;`
 	rows, err := db.Query(sql, simid, agent, iso)
 	if err != nil {
 		return nil, err
@@ -179,22 +178,22 @@ func MatCreated(db *sql.DB, simid string, t0, t1 int, agents ...int) (m nuc.Mate
 	}
 	filt := ""
 	if len(agents) > 0 {
-		filt += " AND cre.ModelID IN (" + strconv.Itoa(agents[0])
+		filt += " AND cre.AgentId IN (" + strconv.Itoa(agents[0])
 		for _, a := range agents[1:] {
 			filt += "," + strconv.Itoa(a)
 		}
 		filt += ") "
 	}
 
-	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * res.Quantity) FROM (
+	sql := `SELECT cmp.NucId,SUM(cmp.MassFrac * res.Quantity) FROM (
 				Resources As res
-				INNER JOIN Compositions AS cmp ON res.StateID = cmp.ID
-				INNER JOIN ResCreators AS cre ON res.ID = cre.ResID
+				INNER JOIN Compositions AS cmp ON res.StateId = cmp.StateId
+				INNER JOIN ResCreators AS cre ON res.ResourceId = cre.ResourceId
 			) WHERE (
-				cre.SimID = ? AND cre.SimID = res.SimID AND cre.SimID = cmp.SimID
+				cre.SimId = ? AND cre.SimId = res.SimId AND cre.SimId = cmp.SimId
 				AND res.TimeCreated >= ? AND res.TimeCreated < ?`
 	sql += filt
-	sql += `) GROUP BY cmp.IsoID;`
+	sql += `) GROUP BY cmp.NucId;`
 	return makeMaterial(db, sql, simid, t0, t1)
 }
 
@@ -211,20 +210,20 @@ func InvAt(db *sql.DB, simid string, t int, agents ...int) (m nuc.Material, err 
 	}
 	filt := ""
 	if len(agents) > 0 {
-		filt += " AND inv.AgentID IN (" + strconv.Itoa(agents[0])
+		filt += " AND inv.AgentId IN (" + strconv.Itoa(agents[0])
 		for _, a := range agents[1:] {
 			filt += "," + strconv.Itoa(a)
 		}
 		filt += ") "
 	}
-	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * inv.Quantity) FROM (
+	sql := `SELECT cmp.NucId,SUM(cmp.MassFrac * inv.Quantity) FROM (
 				Inventories AS inv
-				INNER JOIN Compositions AS cmp ON inv.StateID = cmp.ID
+				INNER JOIN Compositions AS cmp ON inv.StateId = cmp.StateId
 			) WHERE (
-				inv.SimID = ? AND inv.SimID = cmp.SimID
+				inv.SimId = ? AND inv.SimId = cmp.SimId
 				AND inv.StartTime <= ? AND inv.EndTime > ?`
 	sql += filt
-	sql += `) GROUP BY cmp.IsoID;`
+	sql += `) GROUP BY cmp.NucId;`
 	return makeMaterial(db, sql, simid, t, t)
 }
 
@@ -253,23 +252,23 @@ func FlowGraph(db *sql.DB, simid string, t0, t1 int, groupByProto bool) (arcs []
 
 	var sql string
 	if !groupByProto {
-		sql = `SELECT snd.Prototype || " " || tr.SenderID,rcv.Prototype || " " || tr.ReceiverID,tr.Commodity,SUM(res.Quantity) FROM (
+		sql = `SELECT snd.Prototype || " " || tr.SenderId,rcv.Prototype || " " || tr.ReceiverId,tr.Commodity,SUM(res.Quantity) FROM (
 					Resources AS res
-					INNER JOIN Transactions AS tr ON tr.ResourceID = res.ID
-					INNER JOIN Agents AS snd ON snd.ID = tr.SenderID
-					INNER JOIN Agents AS rcv ON rcv.ID = tr.ReceiverID
+					INNER JOIN Transactions AS tr ON tr.ResourceId = res.ResourceId
+					INNER JOIN Agents AS snd ON snd.AgentId = tr.SenderId
+					INNER JOIN Agents AS rcv ON rcv.AgentId = tr.ReceiverId
 				) WHERE (
-					res.SimID = ? AND tr.SimID = res.SimID
+					res.SimId = ? AND tr.SimId = res.SimId
 					AND tr.Time >= ? AND tr.Time < ?
-				) GROUP BY tr.SenderID,tr.ReceiverID,tr.Commodity;`
+				) GROUP BY tr.SenderId,tr.ReceiverId,tr.Commodity;`
 	} else {
 		sql = `SELECT snd.Prototype,rcv.Prototype,tr.Commodity,SUM(res.Quantity) FROM (
 					Resources AS res
-					INNER JOIN Transactions AS tr ON tr.ResourceID = res.ID
-					INNER JOIN Agents AS snd ON snd.ID = tr.SenderID
-					INNER JOIN Agents AS rcv ON rcv.ID = tr.ReceiverID
+					INNER JOIN Transactions AS tr ON tr.ResourceId = res.ResourceId
+					INNER JOIN Agents AS snd ON snd.AgentId = tr.SenderId
+					INNER JOIN Agents AS rcv ON rcv.AgentId = tr.ReceiverId
 				) WHERE (
-					res.SimID = ? AND tr.SimID = res.SimID
+					res.SimId = ? AND tr.SimId = res.SimId
 					AND tr.Time >= ? AND tr.Time < ?
 				) GROUP BY snd.Prototype,rcv.Prototype,tr.Commodity;`
 	}
@@ -306,26 +305,26 @@ func Flow(db *sql.DB, simid string, t0, t1 int, fromAgents, toAgents []int) (m n
 		}
 		t1 = si.StartTime + si.Duration
 	}
-	filt := " AND tr.SenderID IN (" + strconv.Itoa(fromAgents[0])
+	filt := " AND tr.SenderId IN (" + strconv.Itoa(fromAgents[0])
 	for _, a := range fromAgents[1:] {
 		filt += "," + strconv.Itoa(a)
 	}
 	filt += ") "
-	filt += " AND tr.ReceiverID IN (" + strconv.Itoa(toAgents[0])
+	filt += " AND tr.ReceiverId IN (" + strconv.Itoa(toAgents[0])
 	for _, a := range toAgents[1:] {
 		filt += "," + strconv.Itoa(a)
 	}
 	filt += ") "
 
-	sql := `SELECT cmp.IsoID,SUM(cmp.Quantity * res.Quantity) FROM (
+	sql := `SELECT cmp.NucId,SUM(cmp.MassFrac * res.Quantity) FROM (
 				Resources AS res
-				INNER JOIN Compositions AS cmp ON cmp.ID = res.StateID
-				INNER JOIN Transactions AS tr ON tr.ResourceID = res.ID
+				INNER JOIN Compositions AS cmp ON cmp.StateId = res.StateId
+				INNER JOIN Transactions AS tr ON tr.ResourceId = res.ResourceId
 			) WHERE (
-				res.SimID = ? AND cmp.SimID = res.SimID AND tr.SimID = res.SimID
+				res.SimId = ? AND cmp.SimId = res.SimId AND tr.SimId = res.SimId
 				AND tr.Time >= ? AND tr.Time < ?`
 	sql += filt
-	sql += `) GROUP BY cmp.IsoID;`
+	sql += `) GROUP BY cmp.NucId;`
 	return makeMaterial(db, sql, simid, t0, t1)
 }
 
