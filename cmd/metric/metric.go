@@ -2,18 +2,23 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
 	"sort"
 	"strconv"
+	"text/tabwriter"
 
 	_ "code.google.com/p/go-sqlite/go1/sqlite3"
 	"github.com/rwcarlsen/cyan/query"
 )
 
 var (
-	help   = flag.Bool("h", false, "Print this help message")
+	help   = flag.Bool("h", false, "print this help message")
+	custom = flag.String("custom", "", "path to custom sql query spec file")
 	dbname = flag.String("db", "", "cyclus sqlite database to query")
 	simid  = flag.String("simid", "", "simulation id (empty string defaults to first sim id in database")
 )
@@ -23,6 +28,9 @@ var command string
 var db *sql.DB
 
 var cmds = NewCmdSet()
+
+// map[cmdname]sqltext
+var customSql = map[string]string{}
 
 func init() {
 	cmds.Register("agents", "list all agents in the simulation", doAgents)
@@ -52,6 +60,12 @@ func main() {
 		log.Fatal("must specify database with db flag")
 	}
 
+	if *custom != "" {
+		data, err := ioutil.ReadFile(*custom)
+		fatalif(err)
+		fatalif(json.Unmarshal(data, &customSql))
+	}
+
 	var err error
 	db, err = sql.Open("sqlite3", *dbname)
 	fatalif(err)
@@ -66,7 +80,50 @@ func main() {
 	cmds.Execute(flag.Args())
 }
 
-func doSims(args []string) {
+func doCustom(cmd string, oargs []string) {
+	s, ok := customSql[cmd]
+	if !ok {
+		log.Fatalf("Invalid command %v", cmd)
+	}
+	args := make([]interface{}, len(oargs))
+	for i := range args {
+		args[i] = oargs[i]
+	}
+	rows, err := db.Query(s, args...)
+	fatalif(err)
+
+	tw := tabwriter.NewWriter(os.Stdout, 4, 4, 1, ' ', 0)
+	cols, err := rows.Columns()
+	fatalif(err)
+	for _, c := range cols {
+		_, err := tw.Write([]byte(c + "\t"))
+		fatalif(err)
+	}
+	_, err = tw.Write([]byte("\n"))
+	fatalif(err)
+
+	for rows.Next() {
+		vs := make([]interface{}, len(cols))
+		vals := make([]string, len(cols))
+		for i := range vals {
+			vs[i] = &vals[i]
+		}
+		err := rows.Scan(vs...)
+		fatalif(err)
+
+		for _, v := range vals {
+			_, err := tw.Write([]byte(v + "\t"))
+			fatalif(err)
+		}
+		_, err = tw.Write([]byte("\n"))
+		fatalif(err)
+	}
+	fatalif(rows.Err())
+	fatalif(tw.Flush())
+	return
+}
+
+func doSims(cmd string, args []string) {
 	ids, err := query.SimIds(db)
 	fatalif(err)
 	for _, id := range ids {
@@ -76,7 +133,7 @@ func doSims(args []string) {
 	}
 }
 
-func doAgents(args []string) {
+func doAgents(cmd string, args []string) {
 	ags, err := query.AllAgents(db, *simid)
 	fatalif(err)
 	for _, a := range ags {
@@ -84,7 +141,7 @@ func doAgents(args []string) {
 	}
 }
 
-func doInv(args []string) {
+func doInv(cmd string, args []string) {
 	fs := flag.NewFlagSet("inv", flag.ExitOnError)
 	t := fs.Int("t", -1, "timestep of inventory (-1 = end of simulation)")
 	fs.Usage = func() {
@@ -136,7 +193,7 @@ func (ms MultiSeries) Rows() []Row {
 	return rows
 }
 
-func doInvSeries(args []string) {
+func doInvSeries(cmd string, args []string) {
 	fs := flag.NewFlagSet("invseries", flag.ExitOnError)
 	fs.Usage = func() { log.Print("Usage: invseries <agent-id> <isotope> [isotope...]"); fs.PrintDefaults() }
 	fs.Parse(args)
@@ -177,7 +234,7 @@ func doInvSeries(args []string) {
 	}
 }
 
-func doFlowGraph(args []string) {
+func doFlowGraph(cmd string, args []string) {
 	fs := flag.NewFlagSet("flowgraph", flag.ExitOnError)
 	fs.Usage = func() { log.Print("Usage: flowgraph"); fs.PrintDefaults() }
 	proto := fs.Bool("proto", false, "aggregate nodes by prototype")
@@ -193,12 +250,12 @@ func doFlowGraph(args []string) {
 	fmt.Println("    nodesep=1.0;")
 	fmt.Println("    edge [fontsize=9];")
 	for _, arc := range arcs {
-		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v\n(%.3g kg)\"];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity)
+		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v\\n(%.3g kg)\"];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity)
 	}
 	fmt.Println("}")
 }
 
-func doDeploySeries(args []string) {
+func doDeploySeries(cmd string, args []string) {
 	fs := flag.NewFlagSet("deployseries", flag.ExitOnError)
 	fs.Usage = func() { log.Print("Usage: deployseries <prototype>"); fs.PrintDefaults() }
 	fs.Parse(args)
@@ -218,7 +275,7 @@ func doDeploySeries(args []string) {
 	}
 }
 
-func doCreated(args []string) {
+func doCreated(cmd string, args []string) {
 	fs := flag.NewFlagSet("created", flag.ExitOnError)
 	fs.Usage = func() { log.Print("Usage: created [agent-id...]\nZero agents uses all agents"); fs.PrintDefaults() }
 	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
@@ -238,12 +295,12 @@ func doCreated(args []string) {
 	fmt.Printf("%+v\n", m)
 }
 
-func doFlow(args []string) {
+func doFlow(cmd string, args []string) {
 	fs := flag.NewFlagSet("created", flag.ExitOnError)
 	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
 	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
 	fs.Usage = func() {
-		log.Print("Usage: flow <from-agents...> .. <to-agents...>\nZero agents uses all agents")
+		log.Print("Usage: flow <from-agents...> .. <to-agents...>")
 		fs.PrintDefaults()
 	}
 	fs.Parse(args)
@@ -257,7 +314,7 @@ func doFlow(args []string) {
 	}
 
 	before := true
-	for _, arg := range flag.Args()[3:] {
+	for _, arg := range args {
 		if arg == ".." {
 			before = false
 			continue
@@ -288,16 +345,16 @@ func fatalif(err error) {
 }
 
 type CmdSet struct {
-	funcs map[string]func([]string)
+	funcs map[string]func(string, []string) // map[cmdname]func(cmdname, args)
 	Names []string
 	Helps []string
 }
 
 func NewCmdSet() *CmdSet {
-	return &CmdSet{funcs: map[string]func([]string){}}
+	return &CmdSet{funcs: map[string]func(string, []string){}}
 }
 
-func (cs *CmdSet) Register(name, brief string, f func([]string)) {
+func (cs *CmdSet) Register(name, brief string, f func(string, []string)) {
 	cs.Names = append(cs.Names, name)
 	cs.Helps = append(cs.Helps, brief)
 	cs.funcs[name] = f
@@ -307,7 +364,8 @@ func (cs *CmdSet) Execute(args []string) {
 	cmd := args[0]
 	f, ok := cs.funcs[cmd]
 	if !ok {
-		log.Fatalf("Invalid command '%v'", cmd)
+		doCustom(cmd, args[1:])
+		return
 	}
-	f(args[1:])
+	f(cmd, args[1:])
 }
