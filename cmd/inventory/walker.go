@@ -294,8 +294,10 @@ func (c *Context) dumpNodes() {
 	panicif(err)
 
 	for _, n := range c.nodes {
-		err = c.dumpStmt.Exec(c.Simid, n.ResId, n.OwnerId, n.StartTime, n.EndTime, n.StateId, n.Quantity)
-		panicif(err)
+		if n.EndTime > n.StartTime {
+			err = c.dumpStmt.Exec(c.Simid, n.ResId, n.OwnerId, n.StartTime, n.EndTime, n.StateId, n.Quantity)
+			panicif(err)
+		}
 	}
 	err = c.Exec("END TRANSACTION;")
 	panicif(err)
