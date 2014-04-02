@@ -16,7 +16,8 @@ const DumpFreq = 100000
 var (
 	preExecStmts = []string{
 		"DROP TABLE IF EXISTS TimeList;",
-		"CREATE TABLE IF NOT EXISTS Agents (SimId TEXT,AgentID INTEGER,Kind TEXT,Implementation TEXT,Prototype TEXT,ParentId INTEGER,EnterTime INTEGER,ExitTime INTEGER);",
+		"CREATE TABLE IF NOT EXISTS AgentExit (SimId TEXT,AgentId INTEGER,ExitTime INTEGER);",
+		"CREATE TABLE IF NOT EXISTS Agents (SimId TEXT,AgentId INTEGER,Kind TEXT,Implementation TEXT,Prototype TEXT,ParentId INTEGER,Lifetime INTEGER,EnterTime INTEGER,ExitTime INTEGER);",
 		"CREATE TABLE IF NOT EXISTS Inventories (SimId TEXT,ResourceId INTEGER,AgentId INTEGER,StartTime INTEGER,EndTime INTEGER,StateId INTEGER,Quantity REAL);",
 		"CREATE TABLE TimeList AS SELECT DISTINCT Time FROM Transactions;",
 		query.Index("TimeList", "Time"),
@@ -113,12 +114,10 @@ func (c *Context) init() {
 
 	// build Agents table
 	sql := `INSERT INTO Agents
-				SELECT n.SimId,n.AgentId,n.Kind,n.Implementation,n.Prototype,n.ParentId,n.EnterTime,x.ExitTime
+				SELECT n.SimId,n.AgentId,n.Kind,n.Implementation,n.Prototype,n.ParentId,n.Lifetime,n.EnterTime,x.ExitTime
 				FROM
 					AgentEntry AS n
-					INNER JOIN AgentExit AS x ON n.AgentId = x.AgentId
-				WHERE
-					n.SimId = x.SimId AND n.SimId = ?;`
+					LEFT JOIN AgentExit AS x ON n.AgentId = x.AgentId AND n.SimId = x.SimId AND n.SimId = ?;`
 	err = c.Exec(sql, c.Simid)
 	panicif(err)
 

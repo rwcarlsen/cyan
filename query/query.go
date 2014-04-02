@@ -12,7 +12,7 @@ import (
 // SimIds returns a list of all simulation ids in the cyclus database for
 // conn.
 func SimIds(db *sql.DB) (ids []string, err error) {
-	sql := "SELECT SimId FROM SimulationTimeInfo"
+	sql := "SELECT SimId FROM Info"
 	rows, err := db.Query(sql)
 	if err != nil {
 		return nil, err
@@ -44,13 +44,13 @@ func (si SimInfo) String() string {
 }
 
 func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
-	sql := "SELECT SimulationStart,Duration FROM SimulationTimeInfo WHERE SimId = ?"
+	sql := "SELECT Duration,DecayInterval FROM Info WHERE SimId = ?"
 	rows, err := db.Query(sql, simid)
 	if err != nil {
 		return si, err
 	}
 	for rows.Next() {
-		if err := rows.Scan(&si.StartTime, &si.Duration); err != nil {
+		if err := rows.Scan(&si.Duration, &si.DecayPeriod); err != nil {
 			return si, err
 		}
 	}

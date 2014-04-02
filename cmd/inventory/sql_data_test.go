@@ -2,10 +2,10 @@ package main
 
 var rawSimSql = []string{
 	`BEGIN TRANSACTION;`,
-	`CREATE TABLE SimulationTimeInfo (SimID TEXT, SimHandle TEXT, InitialYear INTEGER, InitialMonth INTEGER, SimulationStart INTEGER, Duration INTEGER);`,
-	`INSERT INTO "SimulationTimeInfo" VALUES('07947e67-0c8e-41a2-ad8e-15ecb77b4bde','',2010,1,0,25);`,
-	`INSERT INTO "SimulationTimeInfo" VALUES('f5cc4a28-729f-4e1c-b183-c624a8e94984','',2010,1,0,25);`,
-	`INSERT INTO "SimulationTimeInfo" VALUES('dca7fb0d-b6a6-4738-a90a-88c3a312c0b0','',2010,1,0,25);`,
+	`CREATE TABLE Info (SimID TEXT, SimHandle TEXT, InitialYear INTEGER,InitialMonth INTEGER,Duration INTEGER,DecayInterval INTEGER);`,
+	`INSERT INTO "Info" VALUES('07947e67-0c8e-41a2-ad8e-15ecb77b4bde','',2010,1,25,1);`,
+	`INSERT INTO "Info" VALUES('f5cc4a28-729f-4e1c-b183-c624a8e94984','',2010,1,25,1);`,
+	`INSERT INTO "Info" VALUES('dca7fb0d-b6a6-4738-a90a-88c3a312c0b0','',2010,1,25,1);`,
 	`CREATE TABLE Agents (SimID TEXT, ID INTEGER, AgentType TEXT, ModelType TEXT, Prototype TEXT, ParentID INTEGER, EnterDate INTEGER);`,
 	`INSERT INTO "Agents" VALUES('07947e67-0c8e-41a2-ad8e-15ecb77b4bde',2,'Facility','Builder','deployer',2,0);`,
 	`INSERT INTO "Agents" VALUES('07947e67-0c8e-41a2-ad8e-15ecb77b4bde',3,'Market','Market','milk market',3,0);`,
