@@ -18,22 +18,23 @@ const (
 // Mass represents a quantity in kg
 type Mass float64
 
-// Nuc describes a nuclide in ZZZAAA format.
+// Nuc describes a nuclide in ZZZAAAMMMM format.
 type Nuc int
 
 // A returns the atomic mass of a nuclide.
 func (n Nuc) A() int {
-	return int(n) % 1000
+	return (int(n) / 10000) % 1000
 }
 
 // Z returns the atomic number of a nuclide.
 func (n Nuc) Z() int {
-	return int(n) / 1000
+	return int(n) / 10000000
 }
 
 // Atoms returns the number of atoms of nuclide n for mass m.
 func Atoms(n Nuc, m Mass) float64 {
-	return float64(m/Mass(n.A())) * Mol
+	v := float64(n.A()) * g / Mol
+	return float64(m) / v
 }
 
 type Material map[Nuc]Mass
@@ -56,9 +57,9 @@ func (m Material) EltMass(anum int) (tot Mass) {
 
 // FPE returns the amount of fission potential energy in Joules for the
 // material described by m.
-func (m Material) FPE() (energy float64) {
-	for n, qty := range m {
-		energy += FissFertE[n] * Atoms(n, qty)
+func FPE(m Material) (energy float64) {
+	for nuc, e := range FissFertE {
+		energy += e * Atoms(nuc, m[nuc])
 	}
-	return energy
+	return energy * MeV
 }
