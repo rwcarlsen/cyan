@@ -101,8 +101,8 @@ func AllAgents(db *sql.DB, simid string) (ags []AgentInfo, err error) {
 
 func DeployCumulative(db *sql.DB, simid string, proto string) (xys []XY, err error) {
 	sql := `SELECT ti.Time,COUNT(*)
-			  FROM Agents AS ag
-			  INNER JOIN TimeList AS ti ON ti.Time >= ag.EnterTime AND ag.ExitTime > ti.Time
+			  FROM TimeList AS ti 
+			  LEFT JOIN Agents AS ag ON ti.Time >= ag.EnterTime AND (ag.ExitTime > ti.Time OR ag.ExitTime IS NULL)
 			WHERE
 			  ag.SimId = ?
 			  AND ag.Prototype = ?
