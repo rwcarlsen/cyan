@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"text/tabwriter"
 
-	_ "code.google.com/p/go-sqlite/go1/sqlite3"
+	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/nuc"
 	"github.com/rwcarlsen/cyan/query"
 )
