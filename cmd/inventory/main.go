@@ -36,6 +36,9 @@ func main() {
 
 	for _, simid := range simids {
 		ctx := NewContext(conn, simid, nil)
-		fatalif(ctx.WalkAll())
+		err := ctx.WalkAll()
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
