@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"math"
-	"strings"
 
 	"code.google.com/p/go-sqlite/go1/sqlite3"
 	"github.com/rwcarlsen/cyan/query"
@@ -15,11 +15,10 @@ const DumpFreq = 100000
 
 var (
 	preExecStmts = []string{
-		"DROP TABLE IF EXISTS TimeList;",
-		"CREATE TABLE IF NOT EXISTS AgentExit (SimId TEXT,AgentId INTEGER,ExitTime INTEGER);",
-		"CREATE TABLE IF NOT EXISTS Agents (SimId TEXT,AgentId INTEGER,Kind TEXT,Implementation TEXT,Prototype TEXT,ParentId INTEGER,Lifetime INTEGER,EnterTime INTEGER,ExitTime INTEGER);",
-		"CREATE TABLE IF NOT EXISTS Inventories (SimId TEXT,ResourceId INTEGER,AgentId INTEGER,StartTime INTEGER,EndTime INTEGER,StateId INTEGER,Quantity REAL);",
-		"CREATE TABLE TimeList AS SELECT DISTINCT Time FROM Transactions;",
+		"CREATE TABLE IF NOT EXISTS AgentExit (SimId BLOB,AgentId INTEGER,ExitTime INTEGER);",
+		"CREATE TABLE IF NOT EXISTS Agents (SimId BLOB,AgentId INTEGER,Kind TEXT,Implementation TEXT,Prototype TEXT,ParentId INTEGER,Lifetime INTEGER,EnterTime INTEGER,ExitTime INTEGER);",
+		"CREATE TABLE IF NOT EXISTS Inventories (SimId BLOB,ResourceId INTEGER,AgentId INTEGER,StartTime INTEGER,EndTime INTEGER,StateId INTEGER,Quantity REAL);",
+		"CREATE TABLE IF NOT EXISTS TimeList (SimId BLOB, Time INTEGER);",
 		query.Index("TimeList", "Time"),
 		query.Index("Resources", "SimId", "ResourceId", "StateId"),
 		query.Index("Compositions", "SimId", "StateId", "NucId"),
@@ -52,7 +51,7 @@ func Prepare(conn *sqlite3.Conn) (err error) {
 	fmt.Println("Creating indexes and inventory table...")
 	for _, sql := range preExecStmts {
 		if err := conn.Exec(sql); err != nil {
-			fmt.Println("    ", err)
+			log.Println("    ", err)
 		}
 	}
 	return nil
@@ -86,7 +85,7 @@ type Context struct {
 	*sqlite3.Conn
 	// Simid is the cyclus simulation id targeted by this context.  Must be
 	// set.
-	Simid       string
+	Simid       []byte
 	mappednodes map[int32]struct{}
 	tmpResTbl   string
 	tmpResStmt  *sqlite3.Stmt
@@ -96,7 +95,7 @@ type Context struct {
 	nodes       []*Node
 }
 
-func NewContext(conn *sqlite3.Conn, simid string, history chan string) *Context {
+func NewContext(conn *sqlite3.Conn, simid []byte, history chan string) *Context {
 	return &Context{
 		Conn:  conn,
 		Simid: simid,
@@ -105,9 +104,9 @@ func NewContext(conn *sqlite3.Conn, simid string, history chan string) *Context 
 
 func (c *Context) init() {
 	// skip if the post processing already exists for this simid in the db
-	_, err := c.Query("SELECT * FROM Inventories WHERE SimId = ? LIMIT 1", c.Simid)
+	_, err := c.Query("SELECT * FROM Agents WHERE SimId = ? LIMIT 1", c.Simid)
 	if err == nil {
-		panic(fmt.Errorf("SimId %v is already post-processed. Skipping.\n", c.Simid))
+		panic(fmt.Errorf("SimId %x is already post-processed. Skipping.\n", c.Simid))
 	} else if err != io.EOF {
 		panicif(err)
 	}
@@ -124,9 +123,22 @@ func (c *Context) init() {
 	c.nodes = make([]*Node, 0, 10000)
 	c.mappednodes = map[int32]struct{}{}
 
+	// build TimeList table
+	sql = "SELECT Duration FROM Info WHERE SimId = ?;"
+	for stmt, err := c.Query(sql, c.Simid); err == nil; err = stmt.Next() {
+		var dur int
+		panicif(stmt.Scan(&dur))
+		for i := 0; i < dur; i++ {
+			c.Exec("INSERT INTO TimeList VALUES (?, ?);", c.Simid, i)
+		}
+	}
+	if err != io.EOF {
+		panicif(err)
+	}
+
 	// create temp res table without simid
 	fmt.Println("Creating temporary resource table...")
-	c.tmpResTbl = "tmp_restbl_" + strings.Replace(c.Simid, "-", "_", -1)
+	c.tmpResTbl = "tmp_restbl_" + fmt.Sprintf("%x", c.Simid)
 	err = c.Exec("DROP TABLE IF EXISTS " + c.tmpResTbl)
 	panicif(err)
 
@@ -163,7 +175,7 @@ func (c *Context) WalkAll() (err error) {
 		}
 	}()
 
-	fmt.Printf("--- Building inventories for simid %v ---\n", c.Simid)
+	fmt.Printf("--- Building inventories for simid %x ---\n", c.Simid)
 	c.init()
 
 	fmt.Println("Retrieving root resource nodes...")

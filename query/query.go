@@ -104,7 +104,8 @@ func DeployCumulative(db *sql.DB, simid string, proto string) (xys []XY, err err
 			  FROM TimeList AS ti 
 			  LEFT JOIN Agents AS ag ON ti.Time >= ag.EnterTime AND (ag.ExitTime > ti.Time OR ag.ExitTime IS NULL)
 			WHERE
-			  ag.SimId = ?
+			  ti.SimId = ag.SimId
+			  AND ag.SimId = ?
 			  AND ag.Prototype = ?
 			GROUP BY ti.Time
 			ORDER BY ti.Time;`
@@ -137,7 +138,7 @@ func InvSeries(db *sql.DB, simid string, agent int, iso int) (xys []XY, err erro
 				INNER JOIN Inventories AS inv ON inv.StateId = cmp.StateId
 				INNER JOIN TimeList AS ti ON (ti.Time >= inv.StartTime AND ti.Time < inv.EndTime)
 			) WHERE (
-				inv.SimId = ? AND inv.SimId = cmp.SimId
+				inv.SimId = ? AND inv.SimId = cmp.SimId AND ti.SimId = inv.SimId
 				AND inv.AgentId = ? AND cmp.NucId = ?
 			) GROUP BY ti.Time,cmp.NucId;`
 	rows, err := db.Query(sql, simid, agent, iso)

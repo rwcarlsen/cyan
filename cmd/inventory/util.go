@@ -10,11 +10,11 @@ import (
 
 // GetSimIds returns a list of all simulation ids in the cyclus database for
 // conn.
-func GetSimIds(conn *sqlite3.Conn) (ids []string, err error) {
+func GetSimIds(conn *sqlite3.Conn) (ids [][]byte, err error) {
 	sql := "SELECT SimID FROM Info"
 	var stmt *sqlite3.Stmt
 	for stmt, err = conn.Query(sql); err == nil; err = stmt.Next() {
-		var s string
+		var s []byte
 		if err := stmt.Scan(&s); err != nil {
 			return nil, err
 		}
