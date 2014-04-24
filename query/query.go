@@ -77,19 +77,24 @@ func (ai AgentInfo) String() string {
 }
 
 func AllAgents(db *sql.DB, simid []byte) (ags []AgentInfo, err error) {
-	sql := `SELECT AgentId,Kind,Implementation,Prototype,ParentId,EnterTime,ExitTime FROM
+	s := `SELECT AgentId,Kind,Implementation,Prototype,ParentId,EnterTime,ExitTime FROM
 				Agents
 			WHERE Agents.SimId = ?;`
-	rows, err := db.Query(sql, simid)
+	rows, err := db.Query(s, simid)
 	if err != nil {
 		return nil, err
 	}
 
 	for rows.Next() {
 		ai := AgentInfo{}
-		if err := rows.Scan(&ai.Id, &ai.Type, &ai.Model, &ai.Proto, &ai.Parent, &ai.Enter, &ai.Exit); err != nil {
+		var exit sql.NullInt64
+		if err := rows.Scan(&ai.Id, &ai.Type, &ai.Model, &ai.Proto, &ai.Parent, &ai.Enter, &exit); err != nil {
 			return nil, err
 		}
+		if !exit.Valid {
+			exit.Int64 = -1
+		}
+		ai.Exit = int(exit.Int64)
 		ags = append(ags, ai)
 	}
 	if err := rows.Err(); err != nil {
@@ -159,12 +164,9 @@ func InvSeries(db *sql.DB, simid []byte, agent int, iso int) (xys []XY, err erro
 
 // MatCreated returns the total amount of material created by the listed
 // agent ids in the simulation for the given sim id between t0 and t1. Passing no
-// agents defaults to all agents. Use t0=-1 to specify beginning-of-simulation.
+// agents defaults to all agents. Use t0=0 to specify beginning-of-simulation.
 // Use t1=-1 to specify end-of-simulation.
 func MatCreated(db *sql.DB, simid []byte, t0, t1 int, agents ...int) (m nuc.Material, err error) {
-	if t0 == -1 {
-		t0 = 0
-	}
 	if t1 == -1 {
 		si, err := SimStat(db, simid)
 		if err != nil {
@@ -231,9 +233,6 @@ type FlowArc struct {
 }
 
 func FlowGraph(db *sql.DB, simid []byte, t0, t1 int, groupByProto bool) (arcs []FlowArc, err error) {
-	if t0 == -1 {
-		t0 = 0
-	}
 	if t1 == -1 {
 		si, err := SimStat(db, simid)
 		if err != nil {
@@ -283,9 +282,6 @@ func FlowGraph(db *sql.DB, simid []byte, t0, t1 int, groupByProto bool) (arcs []
 }
 
 func Flow(db *sql.DB, simid []byte, t0, t1 int, fromAgents, toAgents []int) (m nuc.Material, err error) {
-	if t0 == -1 {
-		t0 = 0
-	}
 	if t1 == -1 {
 		si, err := SimStat(db, simid)
 		if err != nil {
@@ -314,6 +310,33 @@ func Flow(db *sql.DB, simid []byte, t0, t1 int, fromAgents, toAgents []int) (m n
 	sql += filt
 	sql += `) GROUP BY cmp.NucId;`
 	return makeMaterial(db, sql, simid, t0, t1)
+}
+
+// EnergyProduced returns the total amount of energy produced between t0 and
+// t1 in Joules. Use t1=-1 to specify end-of-simulation.
+func EnergyProduced(db *sql.DB, simid []byte, t0, t1 int) (float64, error) {
+	t2 := t1 + 1
+	if t1 < 0 {
+		t2 = -1
+	}
+	created, err := MatCreated(db, simid, t0+1, t2)
+	if err != nil {
+		return 0, err
+	}
+	mat0, err := InvAt(db, simid, t0)
+	if err != nil {
+		return 0, err
+	}
+	mat1, err := InvAt(db, simid, t1)
+	if err != nil {
+		return 0, err
+	}
+
+	fpeCreated := nuc.FPE(created)
+	fpe0 := nuc.FPE(mat0)
+	fpe1 := nuc.FPE(mat1)
+
+	return fpe0 - (fpe1 - fpeCreated), nil
 }
 
 // Index builds an sql statement for creating a new index on the specified
@@ -352,27 +375,4 @@ func makeMaterial(db *sql.DB, sql string, args ...interface{}) (m nuc.Material, 
 		return nil, err
 	}
 	return m, nil
-}
-
-// EnergyProduced returns the total amount of energy produced between t0 and
-// t1 in Joules.
-func EnergyProduced(db *sql.DB, simid []byte, t0, t1 int) (float64, error) {
-	created, err := MatCreated(db, simid, t0+1, t1+1)
-	if err != nil {
-		return 0, err
-	}
-	mat0, err := InvAt(db, simid, t0)
-	if err != nil {
-		return 0, err
-	}
-	mat1, err := InvAt(db, simid, t1)
-	if err != nil {
-		return 0, err
-	}
-
-	fpeCreated := nuc.FPE(created)
-	fpe0 := nuc.FPE(mat0)
-	fpe1 := nuc.FPE(mat1)
-
-	return fpe0 - (fpe1 - fpeCreated), nil
 }

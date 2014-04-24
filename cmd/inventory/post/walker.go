@@ -48,7 +48,6 @@ var (
 // calculation of cyclus simulation inventory information.  Should be called
 // once before walking begins.
 func Prepare(conn *sqlite3.Conn) (err error) {
-	fmt.Println("Creating indexes and inventory table...")
 	for _, sql := range preExecStmts {
 		if err := conn.Exec(sql); err != nil {
 			log.Println("    ", err)
@@ -61,7 +60,6 @@ func Prepare(conn *sqlite3.Conn) (err error) {
 // completed processing inventory data. It creates final indexes and other
 // finishing tasks.
 func Finish(conn *sqlite3.Conn) (err error) {
-	fmt.Println("Creating inventory indexes...")
 	for _, sql := range postExecStmts {
 		if err := conn.Exec(sql); err != nil {
 			return err
@@ -86,6 +84,7 @@ type Context struct {
 	// Simid is the cyclus simulation id targeted by this context.  Must be
 	// set.
 	Simid       []byte
+	Log         *log.Logger
 	mappednodes map[int32]struct{}
 	tmpResTbl   string
 	tmpResStmt  *sqlite3.Stmt
@@ -99,6 +98,7 @@ func NewContext(conn *sqlite3.Conn, simid []byte, history chan string) *Context 
 	return &Context{
 		Conn:  conn,
 		Simid: simid,
+		Log:   log.New(NullWriter{}, "", 0),
 	}
 }
 
@@ -106,7 +106,7 @@ func (c *Context) init() {
 	// skip if the post processing already exists for this simid in the db
 	_, err := c.Query("SELECT * FROM Agents WHERE SimId = ? LIMIT 1", c.Simid)
 	if err == nil {
-		panic(fmt.Errorf("SimId %x is already post-processed. Skipping.\n", c.Simid))
+		panic(fmt.Sprintf("SimId %x is already post-processed. Skipping.\n", c.Simid))
 	} else if err != io.EOF {
 		panicif(err)
 	}
@@ -137,7 +137,7 @@ func (c *Context) init() {
 	}
 
 	// create temp res table without simid
-	fmt.Println("Creating temporary resource table...")
+	c.Log.Println("Creating temporary resource table...")
 	c.tmpResTbl = "tmp_restbl_" + fmt.Sprintf("%x", c.Simid)
 	err = c.Exec("DROP TABLE IF EXISTS " + c.tmpResTbl)
 	panicif(err)
@@ -146,7 +146,7 @@ func (c *Context) init() {
 	err = c.Exec(sql, c.Simid)
 	panicif(err)
 
-	fmt.Println("Indexing temporary resource table...")
+	c.Log.Println("Indexing temporary resource table...")
 	err = c.Exec(query.Index(c.tmpResTbl, "Parent1"))
 	panicif(err)
 
@@ -175,19 +175,19 @@ func (c *Context) WalkAll() (err error) {
 		}
 	}()
 
-	fmt.Printf("--- Building inventories for simid %x ---\n", c.Simid)
+	c.Log.Printf("--- Building inventories for simid %x ---\n", c.Simid)
 	c.init()
 
-	fmt.Println("Retrieving root resource nodes...")
+	c.Log.Println("Retrieving root resource nodes...")
 	roots := c.getRoots()
 
-	fmt.Printf("Found %v root nodes\n", len(roots))
+	c.Log.Printf("Found %v root nodes\n", len(roots))
 	for i, n := range roots {
-		fmt.Printf("    Processing root %d...\n", i)
+		c.Log.Printf("    Processing root %d...\n", i)
 		c.walkDown(n)
 	}
 
-	fmt.Println("Dropping temporary resource table...")
+	c.Log.Println("Dropping temporary resource table...")
 	err = c.Exec("DROP TABLE " + c.tmpResTbl)
 	panicif(err)
 
@@ -300,7 +300,7 @@ func (c *Context) getNewOwners(id int) (owners, times []int) {
 }
 
 func (c *Context) dumpNodes() {
-	fmt.Printf("    Dumping inventories (%d resources done)...\n", c.resCount)
+	c.Log.Printf("    Dumping inventories (%d resources done)...\n", c.resCount)
 	err := c.Exec("BEGIN TRANSACTION;")
 	panicif(err)
 

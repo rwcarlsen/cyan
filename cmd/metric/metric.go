@@ -245,7 +245,7 @@ func doFlowGraph(cmd string, args []string) {
 	fs := flag.NewFlagSet("flowgraph", flag.ExitOnError)
 	fs.Usage = func() { log.Print("Usage: flowgraph"); fs.PrintDefaults() }
 	proto := fs.Bool("proto", false, "aggregate nodes by prototype")
-	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
+	t0 := fs.Int("t1", 0, "beginning of time interval (default is beginning of simulation)")
 	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
 	fs.Parse(args)
 
@@ -285,7 +285,7 @@ func doDeploySeries(cmd string, args []string) {
 func doCreated(cmd string, args []string) {
 	fs := flag.NewFlagSet("created", flag.ExitOnError)
 	fs.Usage = func() { log.Print("Usage: created [agent-id...]\nZero agents uses all agents"); fs.PrintDefaults() }
-	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
+	t0 := fs.Int("t1", 0, "beginning of time interval (default is beginning of simulation)")
 	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
 	fs.Parse(args)
 
@@ -304,7 +304,7 @@ func doCreated(cmd string, args []string) {
 
 func doFlow(cmd string, args []string) {
 	fs := flag.NewFlagSet("flow", flag.ExitOnError)
-	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
+	t0 := fs.Int("t1", 0, "beginning of time interval (default is beginning of simulation)")
 	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
 	fs.Usage = func() {
 		log.Print("Usage: flow <from-agents...> .. <to-agents...>")
@@ -347,17 +347,13 @@ func doFlow(cmd string, args []string) {
 
 func doEnergy(cmd string, args []string) {
 	fs := flag.NewFlagSet("energy", flag.ExitOnError)
-	t0 := fs.Int("t1", -1, "beginning of time interval (default is beginning of simulation)")
+	t0 := fs.Int("t1", 0, "beginning of time interval (default is beginning of simulation)")
 	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
 	fs.Usage = func() {
 		log.Print("Usage: energy")
 		fs.PrintDefaults()
 	}
 	fs.Parse(args)
-
-	if *t0 == -1 {
-		*t0 = 0
-	}
 
 	e, err := query.EnergyProduced(db, simid, *t0, *t1)
 	fatalif(err)

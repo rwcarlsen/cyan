@@ -55,3 +55,7 @@ func (t *Timer) Stop(label string) {
 	}
 	delete(t.starts, label)
 }
+
+type NullWriter struct{}
+
+func (_ NullWriter) Write(p []byte) (n int, err error) { return len(p), nil }
