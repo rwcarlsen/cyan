@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/mxk/go-sqlite/sqlite3"
-	"github.com/rwcarlsen/cyan/cmd/inventory/post"
+	"github.com/rwcarlsen/cyan/post"
 )
 
 var help = flag.Bool("h", false, "Print this help message.")
