@@ -1,10 +1,10 @@
-package main
+package post
 
 import (
 	"os"
 	"testing"
 
-	"code.google.com/p/go-sqlite/go1/sqlite3"
+	"github.com/mxk/go-sqlite/sqlite3"
 )
 
 const tmpDbFile = "/tmp/cyclus_inv_test_db.sqlite"

@@ -1,4 +1,3 @@
-// inventory creates a fast-queryable agent inventory table for a cyclus output db.
 package main
 
 import (
@@ -7,6 +6,7 @@ import (
 	"log"
 
 	"github.com/mxk/go-sqlite/sqlite3"
+	"github.com/rwcarlsen/cyan/cmd/inventory/post"
 )
 
 var help = flag.Bool("h", false, "Print this help message.")
@@ -28,17 +28,23 @@ func main() {
 	fatalif(err)
 	defer conn.Close()
 
-	fatalif(Prepare(conn))
-	defer Finish(conn)
+	fatalif(post.Prepare(conn))
+	defer post.Finish(conn)
 
-	simids, err := GetSimIds(conn)
+	simids, err := post.GetSimIds(conn)
 	fatalif(err)
 
 	for _, simid := range simids {
-		ctx := NewContext(conn, simid, nil)
+		ctx := post.NewContext(conn, simid, nil)
 		err := ctx.WalkAll()
 		if err != nil {
 			fmt.Println(err)
 		}
+	}
+}
+
+func fatalif(err error) {
+	if err != nil {
+		log.Fatal(err)
 	}
 }

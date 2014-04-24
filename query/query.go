@@ -11,7 +11,7 @@ import (
 
 // SimIds returns a list of all simulation ids in the cyclus database for
 // conn.
-func SimIds(db *sql.DB) (ids []string, err error) {
+func SimIds(db *sql.DB) (ids [][]byte, err error) {
 	sql := "SELECT SimId FROM Info"
 	rows, err := db.Query(sql)
 	if err != nil {
@@ -19,7 +19,7 @@ func SimIds(db *sql.DB) (ids []string, err error) {
 	}
 
 	for rows.Next() {
-		var s string
+		var s []byte
 		if err := rows.Scan(&s); err != nil {
 			return nil, err
 		}
@@ -32,18 +32,17 @@ func SimIds(db *sql.DB) (ids []string, err error) {
 }
 
 type SimInfo struct {
-	Id          string
-	StartTime   int
+	Id          []byte
 	Duration    int
 	DecayPeriod int
 }
 
 func (si SimInfo) String() string {
-	return fmt.Sprintf("%v: start=%v, end=%v, decay=%v", si.Id,
-		si.StartTime, si.StartTime+si.Duration, si.DecayPeriod)
+	return fmt.Sprintf("%x: dur=%v, decay=%v", si.Id,
+		si.Duration, si.DecayPeriod)
 }
 
-func SimStat(db *sql.DB, simid string) (si SimInfo, err error) {
+func SimStat(db *sql.DB, simid []byte) (si SimInfo, err error) {
 	sql := "SELECT Duration,DecayInterval FROM Info WHERE SimId = ?"
 	rows, err := db.Query(sql, simid)
 	if err != nil {
@@ -77,7 +76,7 @@ func (ai AgentInfo) String() string {
 		ai.Type, ai.Model, ai.Proto, ai.Parent, ai.Enter, ai.Exit)
 }
 
-func AllAgents(db *sql.DB, simid string) (ags []AgentInfo, err error) {
+func AllAgents(db *sql.DB, simid []byte) (ags []AgentInfo, err error) {
 	sql := `SELECT AgentId,Kind,Implementation,Prototype,ParentId,EnterTime,ExitTime FROM
 				Agents
 			WHERE Agents.SimId = ?;`
@@ -99,7 +98,7 @@ func AllAgents(db *sql.DB, simid string) (ags []AgentInfo, err error) {
 	return ags, nil
 }
 
-func DeployCumulative(db *sql.DB, simid string, proto string) (xys []XY, err error) {
+func DeployCumulative(db *sql.DB, simid []byte, proto string) (xys []XY, err error) {
 	sql := `SELECT ti.Time,COUNT(*)
 			  FROM TimeList AS ti 
 			  LEFT JOIN Agents AS ag ON ti.Time >= ag.EnterTime AND (ag.ExitTime > ti.Time OR ag.ExitTime IS NULL)
@@ -132,7 +131,7 @@ type XY struct {
 	Y float64
 }
 
-func InvSeries(db *sql.DB, simid string, agent int, iso int) (xys []XY, err error) {
+func InvSeries(db *sql.DB, simid []byte, agent int, iso int) (xys []XY, err error) {
 	sql := `SELECT ti.Time,SUM(cmp.MassFrac * inv.Quantity) FROM (
 				Compositions AS cmp
 				INNER JOIN Inventories AS inv ON inv.StateId = cmp.StateId
@@ -162,20 +161,16 @@ func InvSeries(db *sql.DB, simid string, agent int, iso int) (xys []XY, err erro
 // agent ids in the simulation for the given sim id between t0 and t1. Passing no
 // agents defaults to all agents. Use t0=-1 to specify beginning-of-simulation.
 // Use t1=-1 to specify end-of-simulation.
-func MatCreated(db *sql.DB, simid string, t0, t1 int, agents ...int) (m nuc.Material, err error) {
+func MatCreated(db *sql.DB, simid []byte, t0, t1 int, agents ...int) (m nuc.Material, err error) {
 	if t0 == -1 {
-		si, err := SimStat(db, simid)
-		if err != nil {
-			return nil, err
-		}
-		t0 = si.StartTime
+		t0 = 0
 	}
 	if t1 == -1 {
 		si, err := SimStat(db, simid)
 		if err != nil {
 			return nil, err
 		}
-		t1 = si.StartTime + si.Duration
+		t1 = si.Duration
 	}
 	filt := ""
 	if len(agents) > 0 {
@@ -201,13 +196,13 @@ func MatCreated(db *sql.DB, simid string, t0, t1 int, agents ...int) (m nuc.Mate
 // InvAt returns the material inventory of the listed agent ids for the
 // specified sim id at time t. Passing no agents defaults to all agents. Use
 // t=-1 to specify end-of-simulation.
-func InvAt(db *sql.DB, simid string, t int, agents ...int) (m nuc.Material, err error) {
+func InvAt(db *sql.DB, simid []byte, t int, agents ...int) (m nuc.Material, err error) {
 	if t == -1 {
 		si, err := SimStat(db, simid)
 		if err != nil {
 			return nil, err
 		}
-		t = si.StartTime + si.Duration
+		t = si.Duration
 	}
 	filt := ""
 	if len(agents) > 0 {
@@ -235,20 +230,16 @@ type FlowArc struct {
 	Quantity float64
 }
 
-func FlowGraph(db *sql.DB, simid string, t0, t1 int, groupByProto bool) (arcs []FlowArc, err error) {
+func FlowGraph(db *sql.DB, simid []byte, t0, t1 int, groupByProto bool) (arcs []FlowArc, err error) {
 	if t0 == -1 {
-		si, err := SimStat(db, simid)
-		if err != nil {
-			return nil, err
-		}
-		t0 = si.StartTime
+		t0 = 0
 	}
 	if t1 == -1 {
 		si, err := SimStat(db, simid)
 		if err != nil {
 			return nil, err
 		}
-		t1 = si.StartTime + si.Duration
+		t1 = si.Duration
 	}
 
 	var sql string
@@ -291,20 +282,16 @@ func FlowGraph(db *sql.DB, simid string, t0, t1 int, groupByProto bool) (arcs []
 	return arcs, nil
 }
 
-func Flow(db *sql.DB, simid string, t0, t1 int, fromAgents, toAgents []int) (m nuc.Material, err error) {
+func Flow(db *sql.DB, simid []byte, t0, t1 int, fromAgents, toAgents []int) (m nuc.Material, err error) {
 	if t0 == -1 {
-		si, err := SimStat(db, simid)
-		if err != nil {
-			return nil, err
-		}
-		t0 = si.StartTime
+		t0 = 0
 	}
 	if t1 == -1 {
 		si, err := SimStat(db, simid)
 		if err != nil {
 			return nil, err
 		}
-		t1 = si.StartTime + si.Duration
+		t1 = si.Duration
 	}
 	filt := " AND tr.SenderId IN (" + strconv.Itoa(fromAgents[0])
 	for _, a := range fromAgents[1:] {
@@ -365,4 +352,27 @@ func makeMaterial(db *sql.DB, sql string, args ...interface{}) (m nuc.Material, 
 		return nil, err
 	}
 	return m, nil
+}
+
+// EnergyProduced returns the total amount of energy produced between t0 and
+// t1 in Joules.
+func EnergyProduced(db *sql.DB, simid []byte, t0, t1 int) (float64, error) {
+	created, err := MatCreated(db, simid, t0+1, t1+1)
+	if err != nil {
+		return 0, err
+	}
+	mat0, err := InvAt(db, simid, t0)
+	if err != nil {
+		return 0, err
+	}
+	mat1, err := InvAt(db, simid, t1)
+	if err != nil {
+		return 0, err
+	}
+
+	fpeCreated := nuc.FPE(created)
+	fpe0 := nuc.FPE(mat0)
+	fpe1 := nuc.FPE(mat1)
+
+	return fpe0 - (fpe1 - fpeCreated), nil
 }

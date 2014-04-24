@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,16 +14,17 @@ import (
 	"text/tabwriter"
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
-	"github.com/rwcarlsen/cyan/nuc"
 	"github.com/rwcarlsen/cyan/query"
 )
 
 var (
-	help   = flag.Bool("h", false, "print this help message")
-	custom = flag.String("custom", "", "path to custom sql query spec file")
-	dbname = flag.String("db", "", "cyclus sqlite database to query")
-	simid  = flag.String("simid", "", "simulation id (empty string defaults to first sim id in database")
+	help     = flag.Bool("h", false, "print this help message")
+	custom   = flag.String("custom", "", "path to custom sql query spec file")
+	dbname   = flag.String("db", "", "cyclus sqlite database to query")
+	simidstr = flag.String("simid", "", "simulation id in hex (empty string defaults to first sim id in database")
 )
+
+var simid []byte
 
 var command string
 
@@ -73,10 +75,13 @@ func main() {
 	fatalif(err)
 	defer db.Close()
 
-	if *simid == "" {
+	if *simidstr == "" {
 		ids, err := query.SimIds(db)
 		fatalif(err)
-		*simid = ids[0]
+		simid = ids[0]
+	} else {
+		simid, err = hex.DecodeString(*simidstr)
+		fatalif(err)
 	}
 
 	cmds.Execute(flag.Args())
@@ -136,7 +141,7 @@ func doSims(cmd string, args []string) {
 }
 
 func doAgents(cmd string, args []string) {
-	ags, err := query.AllAgents(db, *simid)
+	ags, err := query.AllAgents(db, simid)
 	fatalif(err)
 	for _, a := range ags {
 		fmt.Println(a)
@@ -159,7 +164,7 @@ func doInv(cmd string, args []string) {
 		agents = append(agents, id)
 	}
 
-	m, err := query.InvAt(db, *simid, *t, agents...)
+	m, err := query.InvAt(db, simid, *t, agents...)
 	fatalif(err)
 	fmt.Printf("%+v\n", m)
 }
@@ -216,7 +221,7 @@ func doInvSeries(cmd string, args []string) {
 
 	ms := MultiSeries{}
 	for _, iso := range isos {
-		xys, err := query.InvSeries(db, *simid, agent, iso)
+		xys, err := query.InvSeries(db, simid, agent, iso)
 		ms = append(ms, xys)
 		fatalif(err)
 	}
@@ -244,7 +249,7 @@ func doFlowGraph(cmd string, args []string) {
 	t1 := fs.Int("t2", -1, "end of time interval (default if end of simulation)")
 	fs.Parse(args)
 
-	arcs, err := query.FlowGraph(db, *simid, *t0, *t1, *proto)
+	arcs, err := query.FlowGraph(db, simid, *t0, *t1, *proto)
 	fatalif(err)
 
 	fmt.Println("digraph ResourceFlows {")
@@ -267,7 +272,7 @@ func doDeploySeries(cmd string, args []string) {
 	}
 
 	proto := fs.Arg(0)
-	xys, err := query.DeployCumulative(db, *simid, proto)
+	xys, err := query.DeployCumulative(db, simid, proto)
 	fatalif(err)
 
 	fmt.Printf("# Prototype %v total active deployments\n", proto)
@@ -292,7 +297,7 @@ func doCreated(cmd string, args []string) {
 		agents = append(agents, id)
 	}
 
-	m, err := query.MatCreated(db, *simid, *t0, *t1, agents...)
+	m, err := query.MatCreated(db, simid, *t0, *t1, agents...)
 	fatalif(err)
 	fmt.Printf("%+v\n", m)
 }
@@ -335,7 +340,7 @@ func doFlow(cmd string, args []string) {
 		return
 	}
 
-	m, err := query.Flow(db, *simid, *t0, *t1, from, to)
+	m, err := query.Flow(db, simid, *t0, *t1, from, to)
 	fatalif(err)
 	fmt.Printf("%+v\n", m)
 }
@@ -354,17 +359,9 @@ func doEnergy(cmd string, args []string) {
 		*t0 = 0
 	}
 
-	created, err := query.MatCreated(db, *simid, *t0+1, *t1+1)
-	mat0, err := query.InvAt(db, *simid, *t0)
+	e, err := query.EnergyProduced(db, simid, *t0, *t1)
 	fatalif(err)
-	mat1, err := query.InvAt(db, *simid, *t1)
-	fatalif(err)
-
-	fpeCreated := nuc.FPE(created)
-	fpe0 := nuc.FPE(mat0)
-	fpe1 := nuc.FPE(mat1)
-
-	fmt.Println(fpe0 - (fpe1 - fpeCreated))
+	fmt.Println(e)
 }
 
 func fatalif(err error) {

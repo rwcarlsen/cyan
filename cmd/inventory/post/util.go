@@ -1,8 +1,7 @@
-package main
+package post
 
 import (
 	"io"
-	"log"
 	"time"
 
 	"github.com/mxk/go-sqlite/sqlite3"
@@ -24,12 +23,6 @@ func GetSimIds(conn *sqlite3.Conn) (ids [][]byte, err error) {
 		return nil, err
 	}
 	return ids, nil
-}
-
-func fatalif(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 func panicif(err error) {

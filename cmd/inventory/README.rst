@@ -28,7 +28,7 @@ To build the tool:
   
 #. There is one external dependency.  To install it run::
 
-    go get code.google.com/p/go-sqlite/go1/sqlite3
+	go get github.com/mxk/go-sqlite/sqlite3
 
 #. Run ``go build`` in the inventory directory (this dir) to build the binary.
 

@@ -1,4 +1,4 @@
-package main
+package post
 
 var rawSimSql = []string{
 	`BEGIN TRANSACTION;`,
