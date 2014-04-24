@@ -19,6 +19,7 @@ var (
 		"CREATE TABLE IF NOT EXISTS Agents (SimId BLOB,AgentId INTEGER,Kind TEXT,Implementation TEXT,Prototype TEXT,ParentId INTEGER,Lifetime INTEGER,EnterTime INTEGER,ExitTime INTEGER);",
 		"CREATE TABLE IF NOT EXISTS Inventories (SimId BLOB,ResourceId INTEGER,AgentId INTEGER,StartTime INTEGER,EndTime INTEGER,StateId INTEGER,Quantity REAL);",
 		"CREATE TABLE IF NOT EXISTS TimeList (SimId BLOB, Time INTEGER);",
+		"CREATE TABLE IF NOT EXISTS Transactions (SimId BLOB, TransactionId INTEGER, SenderId INTEGER, ReceiverId INTEGER, ResourceId INTEGER, Commodity TEXT, Time INTEGER);",
 		query.Index("TimeList", "Time"),
 		query.Index("Resources", "SimId", "ResourceId", "StateId"),
 		query.Index("Compositions", "SimId", "StateId", "NucId"),
