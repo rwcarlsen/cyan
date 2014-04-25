@@ -62,25 +62,33 @@ func SimStat(db *sql.DB, simid []byte) (si SimInfo, err error) {
 }
 
 type AgentInfo struct {
-	Id     int
-	Type   string
-	Model  string
-	Proto  string
-	Parent int
-	Enter  int
-	Exit   int
+	Id       int
+	Kind     string
+	Impl     string
+	Proto    string
+	Parent   int
+	Lifetime int
+	Enter    int
+	Exit     int
 }
 
 func (ai AgentInfo) String() string {
-	return fmt.Sprintf("%v %v:%v:%v: parent=%v, enter=%v, exit=%v", ai.Id,
-		ai.Type, ai.Model, ai.Proto, ai.Parent, ai.Enter, ai.Exit)
+	return fmt.Sprintf("%v %v:%v:%v: parent=%v, lifetime=%v, enter=%v, exit=%v", ai.Id,
+		ai.Kind, ai.Impl, ai.Proto, ai.Parent, ai.Lifetime, ai.Enter, ai.Exit)
 }
 
-func AllAgents(db *sql.DB, simid []byte) (ags []AgentInfo, err error) {
-	s := `SELECT AgentId,Kind,Implementation,Prototype,ParentId,EnterTime,ExitTime FROM
+func AllAgents(db *sql.DB, simid []byte, proto string) (ags []AgentInfo, err error) {
+	s := `SELECT AgentId,Kind,Implementation,Prototype,ParentId,EnterTime,ExitTime,Lifetime FROM
 				Agents
-			WHERE Agents.SimId = ?;`
-	rows, err := db.Query(s, simid)
+			WHERE Agents.SimId = ?`
+
+	var rows *sql.Rows
+	if proto != "" {
+		s += ` AND Agents.Prototype = ?`
+		rows, err = db.Query(s, simid, proto)
+	} else {
+		rows, err = db.Query(s, simid)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +96,7 @@ func AllAgents(db *sql.DB, simid []byte) (ags []AgentInfo, err error) {
 	for rows.Next() {
 		ai := AgentInfo{}
 		var exit sql.NullInt64
-		if err := rows.Scan(&ai.Id, &ai.Type, &ai.Model, &ai.Proto, &ai.Parent, &ai.Enter, &exit); err != nil {
+		if err := rows.Scan(&ai.Id, &ai.Kind, &ai.Impl, &ai.Proto, &ai.Parent, &ai.Enter, &exit, &ai.Lifetime); err != nil {
 			return nil, err
 		}
 		if !exit.Valid {
@@ -223,6 +231,17 @@ func InvAt(db *sql.DB, simid []byte, t int, agents ...int) (m nuc.Material, err 
 	sql += filt
 	sql += `) GROUP BY cmp.NucId;`
 	return makeMaterial(db, sql, simid, t, t)
+}
+
+// InvMassAt returns the mass of material inventory of the listed agent ids
+// for the specified sim id at time t. Passing no agents defaults to all
+// agents. Use t=-1 to specify end-of-simulation.
+func InvMassAt(db *sql.DB, simid []byte, t int, agents ...int) (mass float64, err error) {
+	m, err := InvAt(db, simid, t, agents...)
+	if err != nil {
+		return 0, err
+	}
+	return float64(m.Mass()), nil
 }
 
 type FlowArc struct {

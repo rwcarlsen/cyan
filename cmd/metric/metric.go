@@ -141,7 +141,15 @@ func doSims(cmd string, args []string) {
 }
 
 func doAgents(cmd string, args []string) {
-	ags, err := query.AllAgents(db, simid)
+	fs := flag.NewFlagSet("agents", flag.ExitOnError)
+	proto := fs.String("proto", "", "filter by prototype (default \"\" is all prototypes)")
+	fs.Usage = func() {
+		log.Print("Usage: agents")
+		fs.PrintDefaults()
+	}
+	fs.Parse(args)
+
+	ags, err := query.AllAgents(db, simid, *proto)
 	fatalif(err)
 	for _, a := range ags {
 		fmt.Println(a)
