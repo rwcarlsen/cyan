@@ -112,6 +112,10 @@ func (c *Context) init() {
 		panicif(err)
 	}
 
+	err = c.Exec("BEGIN TRANSACTION;")
+	panicif(err)
+	defer c.Exec("END TRANSACTION;")
+
 	// build Agents table
 	sql := `INSERT INTO Agents
 				SELECT n.SimId,n.AgentId,n.Kind,n.Implementation,n.Prototype,n.ParentId,n.Lifetime,n.EnterTime,x.ExitTime
