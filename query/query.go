@@ -112,15 +112,17 @@ func AllAgents(db *sql.DB, simid []byte, proto string) (ags []AgentInfo, err err
 }
 
 func DeployCumulative(db *sql.DB, simid []byte, proto string) (xys []XY, err error) {
-	sql := `SELECT ti.Time,COUNT(*)
-			  FROM TimeList AS ti 
-			  LEFT JOIN Agents AS ag ON ti.Time >= ag.EnterTime AND (ag.ExitTime >= ti.Time OR ag.ExitTime IS NULL)
-			WHERE
-			  ti.SimId = ag.SimId
-			  AND ag.SimId = ?
-			  AND ag.Prototype = ?
-			GROUP BY ti.Time
-			ORDER BY ti.Time;`
+	sql := `SELECT Time, IFNULL(Count, 0) FROM 
+			TimeList LEFT JOIN
+			(SELECT ti.Time AS Timestep,COUNT(*) AS Count FROM
+				TimeList AS ti 
+				JOIN Agents AS ag ON (ti.Time >= ag.EnterTime) AND (ag.ExitTime >= ti.Time OR ag.ExitTime IS NULL)
+				WHERE
+				    ti.SimId = ag.SimId
+					AND ag.SimId = ?
+					AND ag.Prototype = ?
+				GROUP BY ti.Time
+				ORDER BY ti.Time) AS foo ON foo.Timestep = TimeList.Time;`
 	rows, err := db.Query(sql, simid, proto)
 	if err != nil {
 		return nil, err
