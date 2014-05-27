@@ -16,13 +16,13 @@ const DumpFreq = 100000
 var (
 	preExecStmts = []string{
 		"CREATE TABLE IF NOT EXISTS AgentExit (SimId BLOB,AgentId INTEGER,ExitTime INTEGER);",
-		"CREATE TABLE IF NOT EXISTS Agents (SimId BLOB,AgentId INTEGER,Kind TEXT,Implementation TEXT,Prototype TEXT,ParentId INTEGER,Lifetime INTEGER,EnterTime INTEGER,ExitTime INTEGER);",
-		"CREATE TABLE IF NOT EXISTS Inventories (SimId BLOB,ResourceId INTEGER,AgentId INTEGER,StartTime INTEGER,EndTime INTEGER,StateId INTEGER,Quantity REAL);",
+		"CREATE TABLE IF NOT EXISTS Agents (SimId BLOB,AgentId INTEGER,Kind TEXT,Spec TEXT,Prototype TEXT,ParentId INTEGER,Lifetime INTEGER,EnterTime INTEGER,ExitTime INTEGER);",
+		"CREATE TABLE IF NOT EXISTS Inventories (SimId BLOB,ResourceId INTEGER,AgentId INTEGER,StartTime INTEGER,EndTime INTEGER,QualId INTEGER,Quantity REAL);",
 		"CREATE TABLE IF NOT EXISTS TimeList (SimId BLOB, Time INTEGER);",
 		"CREATE TABLE IF NOT EXISTS Transactions (SimId BLOB, TransactionId INTEGER, SenderId INTEGER, ReceiverId INTEGER, ResourceId INTEGER, Commodity TEXT, Time INTEGER);",
 		query.Index("TimeList", "Time"),
-		query.Index("Resources", "SimId", "ResourceId", "StateId"),
-		query.Index("Compositions", "SimId", "StateId", "NucId"),
+		query.Index("Resources", "SimId", "ResourceId", "QualId"),
+		query.Index("Compositions", "SimId", "QualId", "NucId"),
 		query.Index("Transactions", "SimId", "ResourceId"),
 		query.Index("Transactions", "TransactionId"),
 		query.Index("ResCreators", "SimId", "ResourceId"),
@@ -34,13 +34,13 @@ var (
 		"ANALYZE;",
 	}
 	dumpSql    = "INSERT INTO Inventories VALUES (?,?,?,?,?,?,?);"
-	resSqlHead = "SELECT ResourceId,TimeCreated,StateId,Quantity FROM "
+	resSqlHead = "SELECT ResourceId,TimeCreated,QualId,Quantity FROM "
 	resSqlTail = " WHERE Parent1 = ? OR Parent2 = ?;"
 
 	ownerSql = `SELECT tr.ReceiverId, tr.Time FROM Transactions AS tr
 				  WHERE tr.ResourceId = ? AND tr.SimId = ?
 				  ORDER BY tr.Time ASC;`
-	rootsSql = `SELECT res.ResourceId,res.TimeCreated,rc.AgentId,res.StateId,Quantity FROM Resources AS res
+	rootsSql = `SELECT res.ResourceId,res.TimeCreated,rc.AgentId,res.QualId,Quantity FROM Resources AS res
 				  INNER JOIN ResCreators AS rc ON res.ResourceId = rc.ResourceId
 				  WHERE res.SimId = ? AND rc.SimId = ?;`
 )
@@ -74,7 +74,7 @@ type Node struct {
 	OwnerId   int
 	StartTime int
 	EndTime   int
-	StateId   int
+	QualId    int
 	Quantity  float64
 }
 
@@ -118,7 +118,7 @@ func (c *Context) init() {
 
 	// build Agents table
 	sql := `INSERT INTO Agents
-				SELECT n.SimId,n.AgentId,n.Kind,n.Implementation,n.Prototype,n.ParentId,n.Lifetime,n.EnterTime,x.ExitTime
+				SELECT n.SimId,n.AgentId,n.Kind,n.Spec,n.Prototype,n.ParentId,n.Lifetime,n.EnterTime,x.ExitTime
 				FROM
 					AgentEntry AS n
 					LEFT JOIN AgentExit AS x ON n.AgentId = x.AgentId AND n.SimId = x.SimId AND n.SimId = ?;`
@@ -147,7 +147,7 @@ func (c *Context) init() {
 	err = c.Exec("DROP TABLE IF EXISTS " + c.tmpResTbl)
 	panicif(err)
 
-	sql = "CREATE TABLE " + c.tmpResTbl + " AS SELECT ResourceId,TimeCreated,Parent1,Parent2,StateId,Quantity FROM Resources WHERE SimId = ?;"
+	sql = "CREATE TABLE " + c.tmpResTbl + " AS SELECT ResourceId,TimeCreated,Parent1,Parent2,QualId,Quantity FROM Resources WHERE SimId = ?;"
 	err = c.Exec(sql, c.Simid)
 	panicif(err)
 
@@ -214,7 +214,7 @@ func (c *Context) getRoots() (roots []*Node) {
 	roots = make([]*Node, 0, n)
 	for stmt, err = c.Query(rootsSql, c.Simid, c.Simid); err == nil; err = stmt.Next() {
 		node := &Node{EndTime: math.MaxInt32}
-		err := stmt.Scan(&node.ResId, &node.StartTime, &node.OwnerId, &node.StateId, &node.Quantity)
+		err := stmt.Scan(&node.ResId, &node.StartTime, &node.OwnerId, &node.QualId, &node.Quantity)
 		panicif(err)
 
 		roots = append(roots, node)
@@ -242,7 +242,7 @@ func (c *Context) walkDown(node *Node) {
 	err := c.tmpResStmt.Query(node.ResId, node.ResId)
 	for ; err == nil; err = c.tmpResStmt.Next() {
 		child := &Node{EndTime: math.MaxInt32}
-		err := c.tmpResStmt.Scan(&child.ResId, &child.StartTime, &child.StateId, &child.Quantity)
+		err := c.tmpResStmt.Scan(&child.ResId, &child.StartTime, &child.QualId, &child.Quantity)
 		panicif(err)
 		node.EndTime = child.StartTime
 		kids = append(kids, child)
@@ -269,7 +269,7 @@ func (c *Context) walkDown(node *Node) {
 				OwnerId:   owners[i],
 				StartTime: times[i],
 				EndTime:   times[i+1],
-				StateId:   node.StateId,
+				QualId:    node.QualId,
 				Quantity:  node.Quantity,
 			}
 			c.nodes = append(c.nodes, n)
@@ -311,7 +311,7 @@ func (c *Context) dumpNodes() {
 
 	for _, n := range c.nodes {
 		if n.EndTime > n.StartTime {
-			err = c.dumpStmt.Exec(c.Simid, n.ResId, n.OwnerId, n.StartTime, n.EndTime, n.StateId, n.Quantity)
+			err = c.dumpStmt.Exec(c.Simid, n.ResId, n.OwnerId, n.StartTime, n.EndTime, n.QualId, n.Quantity)
 			panicif(err)
 		}
 	}

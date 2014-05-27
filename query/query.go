@@ -32,24 +32,22 @@ func SimIds(db *sql.DB) (ids [][]byte, err error) {
 }
 
 type SimInfo struct {
-	Id          []byte
-	Duration    int
-	DecayPeriod int
+	Id       []byte
+	Duration int
 }
 
 func (si SimInfo) String() string {
-	return fmt.Sprintf("%x: dur=%v, decay=%v", si.Id,
-		si.Duration, si.DecayPeriod)
+	return fmt.Sprintf("%x: dur=%v", si.Id, si.Duration)
 }
 
 func SimStat(db *sql.DB, simid []byte) (si SimInfo, err error) {
-	sql := "SELECT Duration,DecayInterval FROM Info WHERE SimId = ?"
+	sql := "SELECT Duration FROM Info WHERE SimId = ?"
 	rows, err := db.Query(sql, simid)
 	if err != nil {
 		return si, err
 	}
 	for rows.Next() {
-		if err := rows.Scan(&si.Duration, &si.DecayPeriod); err != nil {
+		if err := rows.Scan(&si.Duration); err != nil {
 			return si, err
 		}
 	}
@@ -78,7 +76,7 @@ func (ai AgentInfo) String() string {
 }
 
 func AllAgents(db *sql.DB, simid []byte, proto string) (ags []AgentInfo, err error) {
-	s := `SELECT AgentId,Kind,Implementation,Prototype,ParentId,EnterTime,ExitTime,Lifetime FROM
+	s := `SELECT AgentId,Kind,Spec,Prototype,ParentId,EnterTime,ExitTime,Lifetime FROM
 				Agents
 			WHERE Agents.SimId = ?`
 
@@ -149,7 +147,7 @@ type XY struct {
 func InvSeries(db *sql.DB, simid []byte, agent int, iso int) (xys []XY, err error) {
 	sql := `SELECT ti.Time,SUM(cmp.MassFrac * inv.Quantity) FROM (
 				Compositions AS cmp
-				INNER JOIN Inventories AS inv ON inv.StateId = cmp.StateId
+				INNER JOIN Inventories AS inv ON inv.QualId = cmp.QualId
 				INNER JOIN TimeList AS ti ON (ti.Time >= inv.StartTime AND ti.Time < inv.EndTime)
 			) WHERE (
 				inv.SimId = ? AND inv.SimId = cmp.SimId AND ti.SimId = inv.SimId
@@ -195,7 +193,7 @@ func MatCreated(db *sql.DB, simid []byte, t0, t1 int, agents ...int) (m nuc.Mate
 
 	sql := `SELECT cmp.NucId,SUM(cmp.MassFrac * res.Quantity) FROM (
 				Resources As res
-				INNER JOIN Compositions AS cmp ON res.StateId = cmp.StateId
+				INNER JOIN Compositions AS cmp ON res.QualId = cmp.QualId
 				INNER JOIN ResCreators AS cre ON res.ResourceId = cre.ResourceId
 			) WHERE (
 				cre.SimId = ? AND cre.SimId = res.SimId AND cre.SimId = cmp.SimId
@@ -226,7 +224,7 @@ func InvAt(db *sql.DB, simid []byte, t int, agents ...int) (m nuc.Material, err 
 	}
 	sql := `SELECT cmp.NucId,SUM(cmp.MassFrac * inv.Quantity) FROM (
 				Inventories AS inv
-				INNER JOIN Compositions AS cmp ON inv.StateId = cmp.StateId
+				INNER JOIN Compositions AS cmp ON inv.QualId = cmp.QualId
 			) WHERE (
 				inv.SimId = ? AND inv.SimId = cmp.SimId
 				AND inv.StartTime <= ? AND inv.EndTime > ?`
@@ -323,7 +321,7 @@ func Flow(db *sql.DB, simid []byte, t0, t1 int, fromAgents, toAgents []int) (m n
 
 	sql := `SELECT cmp.NucId,SUM(cmp.MassFrac * res.Quantity) FROM (
 				Resources AS res
-				INNER JOIN Compositions AS cmp ON cmp.StateId = res.StateId
+				INNER JOIN Compositions AS cmp ON cmp.QualId = res.QualId
 				INNER JOIN Transactions AS tr ON tr.ResourceId = res.ResourceId
 			) WHERE (
 				res.SimId = ? AND cmp.SimId = res.SimId AND tr.SimId = res.SimId
