@@ -1,6 +1,12 @@
 
 # CyAn - Cyclus Analysis Tools
 
+CyAn contains command line tools for post processing and analyzing Cyclus
+simulation databases (http://fuelcycle.org). It is still experimental and is
+not guaranteed to be 100% correct.
+
+## Installation
+
 To install, you need the Go toolchain.  You can get it from
 http://golang.org/doc/install or you can use your favorite linux
 distribution's package manager:
@@ -17,16 +23,23 @@ You should make a directory to use as your GOPATH and set the GOPATH
 environment variable to it.  The Go tool will install packages into this
 directory.  For convenience, you should also add `$GOPATH/bin` to your PATH so
 that binaries from fetched packages are directly accessible on the command
-line.
+line.  When you are ready, run:
+
+```
+go get github.com/rwcarlsen/cyan/...
+
+```
+
+## Usage
 
 There are two binary tools:
 
-* `cycpost` - for post processing a Cyclus sqlite output database.  Creates an
+* `cycpost` - for post processing a Cyclus sqlite database.  Creates an
   "Inventories" table and combines the "AgentEntry" and "AgentExit" table into
   the "Agents" table.
 
-* `metric` - perform various queries on a Cyclus sqlite output database.  Some
-  queries require `cycpost` to be run on the database first
+* `metric` - perform various queries on a Cyclus sqlite database.  Some
+  queries require `cycpost` to be run on the database first.
 
 Both commands have various flags and subcommands that can be viewed with the
 `-h` flag:
@@ -35,4 +48,17 @@ Both commands have various flags and subcommands that can be viewed with the
 cycpost -h
 metric -h
 metric -db foo.sqlite [subcmd] -h
+```
+
+Some quick examples:
+
+```
+# post process the db
+cycpost cyclus.sqlite
+
+# output a dot graph of the flow of all material between agents t=2 to t=7
+metric -db cyclus.sqlite flowgraph -t1=2 -t2=7
+
+# output a time series of active deployments for all AP1000
+metric -db cyclus.sqlite deployseries AP1000
 ```
