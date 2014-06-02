@@ -56,8 +56,9 @@ Some quick examples:
 # post process the db
 cycpost cyclus.sqlite
 
-# output a dot graph of the flow of all material between agents t=2 to t=7
-metric -db cyclus.sqlite flowgraph -t1=2 -t2=7
+# output a png graph of the flow of all material between agents t=2 to t=7
+metric -db cyclus.sqlite flowgraph -t1=2 -t2=7 > flow.dot
+dot -Tpng -o flow.png flow.dot
 
 # output a time series of active deployments for all AP1000
 metric -db cyclus.sqlite deployseries AP1000
