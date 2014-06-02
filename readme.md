@@ -2,8 +2,8 @@
 # CyAn - Cyclus Analysis Tools
 
 CyAn contains command line tools for post processing and analyzing Cyclus
-simulation databases (http://fuelcycle.org). It is still experimental and is
-not guaranteed to be 100% correct.
+simulation databases (http://fuelcycle.org). It is still experimental and not
+all features have been validated/verified to be correct.
 
 ## Installation
 
