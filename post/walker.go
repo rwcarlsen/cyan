@@ -16,6 +16,8 @@ const DumpFreq = 100000
 var (
 	preExecStmts = []string{
 		"CREATE TABLE IF NOT EXISTS AgentExit (SimId BLOB,AgentId INTEGER,ExitTime INTEGER);",
+		"CREATE TABLE IF NOT EXISTS Resources (SimId INTEGER,ResourceId INTEGER,ObjId INTEGER,Type TEXT,TimeCreated INTEGER,Quantity REAL,Units TEXT,QualId INTEGER,Parent1 INTEGER,Parent2 INTEGER);",
+		"CREATE TABLE IF NOT EXISTS ResCreators (SimId INTEGER,ResourceId INTEGER,AgentId INTEGER);",
 		"CREATE TABLE IF NOT EXISTS Agents (SimId BLOB,AgentId INTEGER,Kind TEXT,Spec TEXT,Prototype TEXT,ParentId INTEGER,Lifetime INTEGER,EnterTime INTEGER,ExitTime INTEGER);",
 		"CREATE TABLE IF NOT EXISTS Inventories (SimId BLOB,ResourceId INTEGER,AgentId INTEGER,StartTime INTEGER,EndTime INTEGER,QualId INTEGER,Quantity REAL);",
 		"CREATE TABLE IF NOT EXISTS TimeList (SimId BLOB, Time INTEGER);",
