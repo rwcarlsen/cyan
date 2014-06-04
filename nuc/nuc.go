@@ -61,5 +61,5 @@ func FPE(m Material) (energy float64) {
 	for nuc, e := range FissFertE {
 		energy += e * Atoms(nuc, m[nuc])
 	}
-	return energy * MeV
+	return energy
 }
