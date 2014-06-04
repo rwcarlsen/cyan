@@ -232,18 +232,20 @@ type Results struct {
 
 const home = `
 <html>
-	<head>
-		<meta charset="UTF-8"/>
-	</head>
-	<body>
-		<form action="/upload" method="POST" enctype="multipart/form-data">
+<head>
+	<meta charset="UTF-8"/>
+</head>
+<body>
+	<h1>Cyclus Data Viewer</h1>
 
-			<label for="file">File:</label>
-			<input name="file" type="file"></input>
-			<input type="submit"></input>
+	<form action="/upload" method="POST" enctype="multipart/form-data">
 
-		</form>
-	</body>
+		<label for="file">Cyclus Sqlite Database:</label>
+		<input name="file" type="file"></input>
+		<input type="submit"></input>
+
+	</form>
+</body>
 </html>
 `
 
