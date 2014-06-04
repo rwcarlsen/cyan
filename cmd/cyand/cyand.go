@@ -111,7 +111,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 
 	ctx := post.NewContext(conn, simids[0], nil)
 	if err := ctx.WalkAll(); err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 
 	// get simid
@@ -178,13 +178,14 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// create transactions table
+	// create Material transactions table
 	sql := `
 		SELECT TransactionId,Time,SenderId,ReceiverId,tr.ResourceId,Commodity,NucId,MassFrac*Quantity
 		FROM Transactions AS tr
 		INNER JOIN Resources AS res ON tr.ResourceId = res.ResourceId
 		INNER JOIN Compositions AS cmp ON res.QualId = cmp.QualId
-		WHERE tr.SimId = ? AND cmp.SimId = res.SimId AND res.SimId = tr.SimId;
+		WHERE tr.SimId = ? AND cmp.SimId = res.SimId AND res.SimId = tr.SimId
+		AND res.Type = 'Material';
 		`
 	rows, err := db.Query(sql, simid)
 	if err != nil {
@@ -200,7 +201,38 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			log.Print(err)
 			return
 		}
-		rs.Trans = append(rs.Trans, t)
+		rs.TransMats = append(rs.TransMats, t)
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+
+	// create Material transactions table
+	sql = `
+		SELECT TransactionId,Time,SenderId,ReceiverId,tr.ResourceId,Commodity,Quality,Quantity
+		FROM Transactions AS tr
+		INNER JOIN Resources AS res ON tr.ResourceId = res.ResourceId
+		INNER JOIN Products AS pd ON res.QualId = pd.QualId
+		WHERE tr.SimId = ? AND pd.SimId = res.SimId AND res.SimId = tr.SimId
+		AND res.Type = 'Product';
+		`
+	rows, err = db.Query(sql, simid)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+
+	for rows.Next() {
+		t := &ProdTrans{}
+		if err := rows.Scan(&t.Id, &t.Time, &t.Sender, &t.Receiver, &t.ResourceId, &t.Commod, &t.Quality, &t.Qty); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Print(err)
+			return
+		}
+		rs.TransProds = append(rs.TransProds, t)
 	}
 	if err := rows.Err(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -210,6 +242,17 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 
 	// render all rsults
 	resultTmpl.Execute(w, rs)
+}
+
+type ProdTrans struct {
+	Id         int
+	Time       int
+	Sender     int
+	Receiver   int
+	ResourceId int
+	Commod     string
+	Quality    string
+	Qty        float64
 }
 
 type Trans struct {
@@ -224,9 +267,10 @@ type Trans struct {
 }
 
 type Results struct {
-	Flowgraph string
-	Agents    []query.AgentInfo
-	Trans     []*Trans
+	Flowgraph  string
+	Agents     []query.AgentInfo
+	TransMats  []*Trans
+	TransProds []*ProdTrans
 }
 
 //<input type="hidden" name="redirect" value="/analysis" />
@@ -280,11 +324,11 @@ const results = `
 		{{ end }}
 	</table>
 	
-	<h2>Transactions Table</h2>
+	<h2>Material Transactions Table</h2>
 	<table>
 		<tr><th>ID</th><th>Time</th><th>Sender</th><th>Receiver</th><th>ResourceId</th><th>Commod</th><th>Nuclide</th><th>Quantity (kg)</th></tr>
 
-		{{ range .Trans}}
+		{{ range .TransMats}}
 		<tr>
 			<td>{{ .Id }}</td>
 			<td>{{ .Time }}</td>
@@ -293,6 +337,24 @@ const results = `
 			<td>{{ .ResourceId }}</td>
 			<td>{{ .Commod }}</td>
 			<td>{{ .Nuc }}</td>
+			<td>{{ .Qty }}</td>
+		</tr>
+		{{ end }}
+	</table>
+
+	<h2>Product Transactions Table</h2>
+	<table>
+		<tr><th>ID</th><th>Time</th><th>Sender</th><th>Receiver</th><th>ResourceId</th><th>Commod</th><th>Quality</th><th>Quantity</th></tr>
+
+		{{ range .TransProds}}
+		<tr>
+			<td>{{ .Id }}</td>
+			<td>{{ .Time }}</td>
+			<td>{{ .Sender }}</td>
+			<td>{{ .Receiver }}</td>
+			<td>{{ .ResourceId }}</td>
+			<td>{{ .Commod }}</td>
+			<td>{{ .Quality }}</td>
 			<td>{{ .Qty }}</td>
 		</tr>
 		{{ end }}
