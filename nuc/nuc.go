@@ -8,6 +8,7 @@ const (
 const (
 	Joule = 1
 	MeV   = 1.602177e-13 * Joule
+	MWh   = 3.6e9
 )
 
 const (
