@@ -25,6 +25,7 @@ var resultTmpl = template.Must(template.New("results").Parse(results))
 var addr = flag.String("addr", "127.0.0.1:4141", "network address of dispatch server")
 
 func main() {
+	flag.Parse()
 	s := NewServer()
 	s.ListenAndServe(*addr)
 	if err := s.ListenAndServe(*addr); err != nil {
