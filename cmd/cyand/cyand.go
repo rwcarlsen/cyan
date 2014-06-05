@@ -244,6 +244,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// render all results and save page
+	rs.Uid = uid
 	resultTmpl.Execute(w, rs)
 
 	f, err := os.Create(uid + ".html")
@@ -279,6 +280,7 @@ type Trans struct {
 }
 
 type Results struct {
+	Uid        string
 	Flowgraph  string
 	Agents     []query.AgentInfo
 	TransMats  []*Trans
@@ -347,6 +349,8 @@ const results = `
 	</style>
 </head>
 <body>
+
+    <h3>Share link: <a href="/share/{{.Uid}}">http://cyc-submit.rwcr.net/share/{{.Uid}}</a></h3>
 
 	<h2>Resource Flow</h2>
 	{{.Flowgraph}}
