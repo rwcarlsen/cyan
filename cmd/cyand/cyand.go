@@ -26,34 +26,21 @@ var addr = flag.String("addr", "127.0.0.1:4141", "network address of dispatch se
 
 func main() {
 	flag.Parse()
-	s := NewServer()
-	s.ListenAndServe(*addr)
-	if err := s.ListenAndServe(*addr); err != nil {
+
+	http.HandleFunc("/", serveHome)
+	http.HandleFunc("/upload", upload)
+
+	err := http.ListenAndServe(*addr, nil)
+	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-type Server struct {
-	Dbs map[string]string
-}
-
-func NewServer() *Server {
-	return &Server{
-		Dbs: map[string]string{},
-	}
-}
-
-func (s *Server) ListenAndServe(addr string) error {
-	http.HandleFunc("/", s.main)
-	http.HandleFunc("/upload", s.upload)
-	return http.ListenAndServe(addr, nil)
-}
-
-func (s *Server) main(w http.ResponseWriter, r *http.Request) {
+func serveHome(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(home))
 }
 
-func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
+func upload(w http.ResponseWriter, r *http.Request) {
 	// parse database from multi part form data
 	if err := r.ParseMultipartForm(MAX_MEMORY); err != nil {
 		log.Println(err)
@@ -297,7 +284,42 @@ const home = `
 const results = `
 <html>
 <head>
+	<title>Cyclus Database Viewer</title>
 	<meta charset="UTF-8"/>
+	<style>
+		h2 {
+			background-color:#8AC1EC;
+			text-align:center;
+		}
+		table {
+			width:80%;
+			border-color:#a9a9a9;
+			color:#333333;
+			border-collapse:collapse;
+			margin:auto;
+			border-width:1px;
+			text-align:center;
+		}
+		th {
+			padding:4px;
+			border-style:solid;
+			border-color:#a9a9a9;
+			border-width:1px;
+			background-color:#b8b8b8;
+			text-align:left;
+		}
+		tr {
+			background-color:#ffffff;
+			text-align:center;
+		}
+		td {
+			padding:4px;
+			border-color:#a9a9a9;
+			border-style:solid;
+			border-width:1px;
+			text-align:center;
+		}
+	</style>
 </head>
 <body>
 
