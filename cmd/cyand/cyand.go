@@ -21,6 +21,7 @@ import (
 const MAX_MEMORY = 50 * 1024 * 1024
 
 var resultTmpl = template.Must(template.New("results").Parse(results))
+var homeTmpl = template.Must(template.New("home").Parse(home))
 
 var addr = flag.String("addr", "127.0.0.1:4141", "network address of dispatch server")
 
@@ -28,7 +29,8 @@ func main() {
 	flag.Parse()
 
 	http.HandleFunc("/", serveHome)
-	http.HandleFunc("/upload", upload)
+	http.HandleFunc("/upload/", upload)
+	http.HandleFunc("/share/", share)
 
 	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
@@ -37,7 +39,20 @@ func main() {
 }
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(home))
+	uid := uuid.NewRandom().String()
+	homeTmpl.Execute(w, uid)
+}
+
+func share(w http.ResponseWriter, r *http.Request) {
+	uid := r.URL.Path[len("/share/"):]
+	fname := uid + ".html"
+	data, err := ioutil.ReadFile(fname)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+	w.Write(data)
 }
 
 func upload(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +64,8 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	gotDb := false
-	fname := uuid.NewRandom().String() + ".sqlite"
+	uid := r.URL.Path[len("/upload/"):]
+	fname := uid + ".sqlite"
 	for _, fileHeaders := range r.MultipartForm.File {
 		for _, fileHeader := range fileHeaders {
 			file, _ := fileHeader.Open()
@@ -227,8 +243,17 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// render all rsults
+	// render all results and save page
 	resultTmpl.Execute(w, rs)
+
+	f, err := os.Create(uid + ".html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+	defer f.Close()
+	resultTmpl.Execute(f, rs)
 }
 
 type ProdTrans struct {
@@ -268,15 +293,15 @@ const home = `
 	<meta charset="UTF-8"/>
 </head>
 <body>
+
 	<h1>Cyclus Data Viewer</h1>
 
-	<form action="/upload" method="POST" enctype="multipart/form-data">
-
+	<form action="/upload/{{.}}" method="POST" enctype="multipart/form-data">
 		<label for="file">Cyclus Sqlite Database:</label>
 		<input name="file" type="file"></input>
 		<input type="submit"></input>
-
 	</form>
+
 </body>
 </html>
 `
