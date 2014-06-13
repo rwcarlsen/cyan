@@ -13,7 +13,7 @@ import (
 	"text/template"
 
 	"code.google.com/p/go-uuid/uuid"
-	"github.com/mxk/go-sqlite/sqlite3"
+	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/post"
 	"github.com/rwcarlsen/cyan/query"
 )
@@ -89,35 +89,6 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// post process the database
-	conn, err := sqlite3.Open(fname)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
-	defer conn.Close()
-
-	err = post.Prepare(conn)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
-	defer post.Finish(conn)
-
-	simids, err := post.GetSimIds(conn)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
-
-	ctx := post.NewContext(conn, simids[0], nil)
-	if err := ctx.WalkAll(); err != nil {
-		log.Println(err)
-	}
-
-	// get simid
 	db, err := sql.Open("sqlite3", fname)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -126,6 +97,27 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
+	err = post.Prepare(db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+	defer post.Finish(db)
+
+	simids, err := post.GetSimIds(db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+
+	ctx := post.NewContext(db, simids[0])
+	if err := ctx.WalkAll(); err != nil {
+		log.Println(err)
+	}
+
+	// get simid
 	ids, err := query.SimIds(db)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

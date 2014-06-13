@@ -1,12 +1,11 @@
 package post
 
 import (
+	"database/sql"
 	"fmt"
-	"io"
 	"log"
 	"math"
 
-	"github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/query"
 )
 
@@ -52,9 +51,9 @@ var (
 // Prepare creates necessary indexes and tables required for efficient
 // calculation of cyclus simulation inventory information.  Should be called
 // once before walking begins.
-func Prepare(conn *sqlite3.Conn) (err error) {
-	for _, sql := range preExecStmts {
-		if err := conn.Exec(sql); err != nil {
+func Prepare(db *sql.DB) (err error) {
+	for _, s := range preExecStmts {
+		if _, err := db.Exec(s); err != nil {
 			log.Println("    ", err)
 		}
 	}
@@ -64,9 +63,9 @@ func Prepare(conn *sqlite3.Conn) (err error) {
 // Finish should be called for a cyclus database after all walkers have
 // completed processing inventory data. It creates final indexes and other
 // finishing tasks.
-func Finish(conn *sqlite3.Conn) (err error) {
-	for _, sql := range postExecStmts {
-		if err := conn.Exec(sql); err != nil {
+func Finish(db *sql.DB) (err error) {
+	for _, s := range postExecStmts {
+		if _, err := db.Exec(s); err != nil {
 			return err
 		}
 	}
@@ -85,23 +84,23 @@ type Node struct {
 // Context encapsulates the logic for building a fast, queryable inventories
 // table for a specific simulation from raw cyclus output database.
 type Context struct {
-	*sqlite3.Conn
+	*sql.DB
 	// Simid is the cyclus simulation id targeted by this context.  Must be
 	// set.
 	Simid       []byte
 	Log         *log.Logger
 	mappednodes map[int32]struct{}
 	tmpResTbl   string
-	tmpResStmt  *sqlite3.Stmt
-	dumpStmt    *sqlite3.Stmt
-	ownerStmt   *sqlite3.Stmt
+	tmpResStmt  *sql.Stmt
+	dumpStmt    *sql.Stmt
+	ownerStmt   *sql.Stmt
 	resCount    int
 	nodes       []*Node
 }
 
-func NewContext(conn *sqlite3.Conn, simid []byte, history chan string) *Context {
+func NewContext(db *sql.DB, simid []byte) *Context {
 	return &Context{
-		Conn:  conn,
+		DB:    db,
 		Simid: simid,
 		Log:   log.New(NullWriter{}, "", 0),
 	}
@@ -109,16 +108,15 @@ func NewContext(conn *sqlite3.Conn, simid []byte, history chan string) *Context 
 
 func (c *Context) init() {
 	// skip if the post processing already exists for this simid in the db
-	_, err := c.Query("SELECT * FROM Agents WHERE SimId = ? LIMIT 1", c.Simid)
+	err := c.QueryRow("SELECT * FROM Agents WHERE SimId = ? LIMIT 1", c.Simid).Scan()
 	if err == nil {
 		panic(fmt.Sprintf("SimId %x is already post-processed. Skipping.\n", c.Simid))
-	} else if err != io.EOF {
+	} else if err != sql.ErrNoRows {
 		panicif(err)
 	}
 
-	err = c.Exec("BEGIN TRANSACTION;")
+	tx, err := c.Begin()
 	panicif(err)
-	defer c.Exec("END TRANSACTION;")
 
 	// build Agents table
 	sql := `INSERT INTO Agents
@@ -126,7 +124,7 @@ func (c *Context) init() {
 				FROM
 					AgentEntry AS n
 					LEFT JOIN AgentExit AS x ON n.AgentId = x.AgentId AND n.SimId = x.SimId AND n.SimId = ?;`
-	err = c.Exec(sql, c.Simid)
+	_, err = tx.Exec(sql, c.Simid)
 	panicif(err)
 
 	c.nodes = make([]*Node, 0, 10000)
@@ -134,33 +132,37 @@ func (c *Context) init() {
 
 	// build TimeList table
 	sql = "SELECT Duration FROM Info WHERE SimId = ?;"
-	for stmt, err := c.Query(sql, c.Simid); err == nil; err = stmt.Next() {
+	rows, err := tx.Query(sql, c.Simid)
+	panicif(err)
+	defer rows.Close()
+	for rows.Next() {
 		var dur int
-		panicif(stmt.Scan(&dur))
+		panicif(rows.Scan(&dur))
 		for i := 0; i < dur; i++ {
-			c.Exec("INSERT INTO TimeList VALUES (?, ?);", c.Simid, i)
+			_, err := tx.Exec("INSERT INTO TimeList VALUES (?, ?);", c.Simid, i)
+			panicif(err)
 		}
 	}
-	if err != io.EOF {
-		panicif(err)
-	}
+	panicif(rows.Err())
 
 	// create temp res table without simid
 	c.Log.Println("Creating temporary resource table...")
 	c.tmpResTbl = "tmp_restbl_" + fmt.Sprintf("%x", c.Simid)
-	err = c.Exec("DROP TABLE IF EXISTS " + c.tmpResTbl)
+	_, err = tx.Exec("DROP TABLE IF EXISTS " + c.tmpResTbl)
 	panicif(err)
 
 	sql = "CREATE TABLE " + c.tmpResTbl + " AS SELECT ResourceId,TimeCreated,Parent1,Parent2,QualId,Quantity FROM Resources WHERE SimId = ?;"
-	err = c.Exec(sql, c.Simid)
+	_, err = tx.Exec(sql, c.Simid)
 	panicif(err)
 
 	c.Log.Println("Indexing temporary resource table...")
-	err = c.Exec(query.Index(c.tmpResTbl, "Parent1"))
+	_, err = tx.Exec(query.Index(c.tmpResTbl, "Parent1"))
 	panicif(err)
 
-	err = c.Exec(query.Index(c.tmpResTbl, "Parent2"))
+	_, err = tx.Exec(query.Index(c.tmpResTbl, "Parent2"))
 	panicif(err)
+
+	tx.Commit()
 
 	// create prepared statements
 	c.tmpResStmt, err = c.Prepare(resSqlHead + c.tmpResTbl + resSqlTail)
@@ -197,7 +199,7 @@ func (c *Context) WalkAll() (err error) {
 	}
 
 	c.Log.Println("Dropping temporary resource table...")
-	err = c.Exec("DROP TABLE " + c.tmpResTbl)
+	_, err = c.Exec("DROP TABLE " + c.tmpResTbl)
 	panicif(err)
 
 	c.dumpNodes()
@@ -207,25 +209,24 @@ func (c *Context) WalkAll() (err error) {
 
 func (c *Context) getRoots() (roots []*Node) {
 	sql := "SELECT COUNT(*) FROM ResCreators WHERE SimId = ?"
-	stmt, err := c.Query(sql, c.Simid)
-	panicif(err)
+	row := c.QueryRow(sql, c.Simid)
 
 	n := 0
-	err = stmt.Scan(&n)
+	err := row.Scan(&n)
 	panicif(err)
-	stmt.Reset()
 
 	roots = make([]*Node, 0, n)
-	for stmt, err = c.Query(rootsSql, c.Simid, c.Simid); err == nil; err = stmt.Next() {
+	rows, err := c.Query(rootsSql, c.Simid, c.Simid)
+	panicif(err)
+	defer rows.Close()
+	for rows.Next() {
 		node := &Node{EndTime: math.MaxInt32}
-		err := stmt.Scan(&node.ResId, &node.StartTime, &node.OwnerId, &node.QualId, &node.Quantity)
+		err := rows.Scan(&node.ResId, &node.StartTime, &node.OwnerId, &node.QualId, &node.Quantity)
 		panicif(err)
 
 		roots = append(roots, node)
 	}
-	if err != io.EOF {
-		panic(err)
-	}
+	panicif(rows.Err())
 	return roots
 }
 
@@ -243,17 +244,19 @@ func (c *Context) walkDown(node *Node) {
 
 	// find resource's children
 	kids := make([]*Node, 0, 2)
-	err := c.tmpResStmt.Query(node.ResId, node.ResId)
-	for ; err == nil; err = c.tmpResStmt.Next() {
+	rows, err := c.tmpResStmt.Query(node.ResId, node.ResId)
+	panicif(err)
+	defer rows.Close()
+
+	for rows.Next() {
 		child := &Node{EndTime: math.MaxInt32}
-		err := c.tmpResStmt.Scan(&child.ResId, &child.StartTime, &child.QualId, &child.Quantity)
+		err := rows.Scan(&child.ResId, &child.StartTime, &child.QualId, &child.Quantity)
 		panicif(err)
 		node.EndTime = child.StartTime
 		kids = append(kids, child)
 	}
-	if err != io.EOF {
-		panic(err)
-	}
+	panicif(rows.Err())
+	rows.Close() // Close is idempotent - and this function is recursive.
 
 	// find resources owner changes (that occurred before children)
 	owners, times := c.getNewOwners(node.ResId)
@@ -291,9 +294,11 @@ func (c *Context) walkDown(node *Node) {
 
 func (c *Context) getNewOwners(id int) (owners, times []int) {
 	var owner, t int
-	err := c.ownerStmt.Query(id, c.Simid)
-	for ; err == nil; err = c.ownerStmt.Next() {
-		err := c.ownerStmt.Scan(&owner, &t)
+	rows, err := c.ownerStmt.Query(id, c.Simid)
+	panicif(err)
+	defer rows.Close()
+	for rows.Next() {
+		err := rows.Scan(&owner, &t)
 		panicif(err)
 
 		if id == owner {
@@ -302,25 +307,24 @@ func (c *Context) getNewOwners(id int) (owners, times []int) {
 		owners = append(owners, owner)
 		times = append(times, t)
 	}
-	if err != io.EOF {
-		panic(err)
-	}
+	panicif(rows.Err())
 	return owners, times
 }
 
 func (c *Context) dumpNodes() {
 	c.Log.Printf("    Dumping inventories (%d resources done)...\n", c.resCount)
-	err := c.Exec("BEGIN TRANSACTION;")
+	tx, err := c.Begin()
 	panicif(err)
+	stmt := tx.Stmt(c.dumpStmt)
 
 	for _, n := range c.nodes {
 		if n.EndTime > n.StartTime {
-			err = c.dumpStmt.Exec(c.Simid, n.ResId, n.OwnerId, n.StartTime, n.EndTime, n.QualId, n.Quantity)
+			_, err = stmt.Exec(c.Simid, n.ResId, n.OwnerId, n.StartTime, n.EndTime, n.QualId, n.Quantity)
 			panicif(err)
 		}
 	}
-	err = c.Exec("END TRANSACTION;")
-	panicif(err)
 
+	err = tx.Commit()
+	panicif(err)
 	c.nodes = c.nodes[:0]
 }

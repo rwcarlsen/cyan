@@ -1,25 +1,28 @@
 package post
 
 import (
-	"io"
+	"database/sql"
 	"time"
-
-	"github.com/mxk/go-sqlite/sqlite3"
 )
 
 // GetSimIds returns a list of all simulation ids in the cyclus database for
 // conn.
-func GetSimIds(conn *sqlite3.Conn) (ids [][]byte, err error) {
+func GetSimIds(db *sql.DB) (ids [][]byte, err error) {
 	sql := "SELECT SimID FROM Info"
-	var stmt *sqlite3.Stmt
-	for stmt, err = conn.Query(sql); err == nil; err = stmt.Next() {
+	rows, err := db.Query(sql)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
 		var s []byte
-		if err := stmt.Scan(&s); err != nil {
+		if err := rows.Scan(&s); err != nil {
 			return nil, err
 		}
 		ids = append(ids, s)
 	}
-	if err != io.EOF {
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	return ids, nil

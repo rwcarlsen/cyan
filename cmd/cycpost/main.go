@@ -1,15 +1,18 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
-	"github.com/mxk/go-sqlite/sqlite3"
+	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/post"
 )
 
 var help = flag.Bool("h", false, "Print this help message.")
+var verbose = flag.Bool("v", false, "print verbose progress output")
 
 func main() {
 	log.SetFlags(0)
@@ -24,18 +27,21 @@ func main() {
 
 	fname := flag.Arg(0)
 
-	conn, err := sqlite3.Open(fname)
+	db, err := sql.Open("sqlite3", fname)
 	fatalif(err)
-	defer conn.Close()
+	defer db.Close()
 
-	fatalif(post.Prepare(conn))
-	defer post.Finish(conn)
+	fatalif(post.Prepare(db))
+	defer post.Finish(db)
 
-	simids, err := post.GetSimIds(conn)
+	simids, err := post.GetSimIds(db)
 	fatalif(err)
 
 	for _, simid := range simids {
-		ctx := post.NewContext(conn, simid, nil)
+		ctx := post.NewContext(db, simid)
+		if *verbose {
+			ctx.Log = log.New(os.Stdout, "", 0)
+		}
 		err := ctx.WalkAll()
 		if err != nil {
 			fmt.Println(err)
