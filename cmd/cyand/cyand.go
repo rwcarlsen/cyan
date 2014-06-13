@@ -156,8 +156,15 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(dotf, "    overlap = false;")
 	fmt.Fprintln(dotf, "    nodesep=1.0;")
 	fmt.Fprintln(dotf, "    edge [fontsize=9];")
+	max := 0.0
 	for _, arc := range arcs {
-		fmt.Fprintf(dotf, "    \"%v\" -> \"%v\" [label=\"%v\\n(%.3g kg)\"];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity)
+		if arc.Quantity > max {
+			max = arc.Quantity
+		}
+	}
+	for _, arc := range arcs {
+		penwidth := int(arc.Quantity / max * 15)
+		fmt.Fprintf(dotf, "    \"%v\" -> \"%v\" [label=\"%v\\n(%.3g kg)\", penwidth=%v];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity, penwidth)
 	}
 	fmt.Fprintln(dotf, "}")
 	dotf.Close()
