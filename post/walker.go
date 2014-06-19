@@ -108,9 +108,10 @@ func NewContext(db *sql.DB, simid []byte) *Context {
 
 func (c *Context) init() {
 	// skip if the post processing already exists for this simid in the db
-	err := c.QueryRow("SELECT * FROM Agents WHERE SimId = ? LIMIT 1", c.Simid).Scan()
+	dummy := 0
+	err := c.QueryRow("SELECT AgentId FROM Agents WHERE SimId = ? LIMIT 1", c.Simid).Scan(&dummy)
 	if err == nil {
-		panic(fmt.Sprintf("SimId %x is already post-processed. Skipping.\n", c.Simid))
+		panic(fmt.Sprintf("SimId %x is already post-processed - skipping", c.Simid))
 	} else if err != sql.ErrNoRows {
 		panicif(err)
 	}
