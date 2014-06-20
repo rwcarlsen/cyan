@@ -1,5 +1,10 @@
 package nuc
 
+import (
+	"bytes"
+	"fmt"
+)
+
 const (
 	Kg = 1
 	g  = 1e-3 * Kg
@@ -40,11 +45,27 @@ func Atoms(n Nuc, m Mass) float64 {
 
 type Material map[Nuc]Mass
 
+func (m Material) String() string {
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "# Material mass=%v. Composition:\n", m.Mass())
+	for nuc, qty := range m {
+		fmt.Fprintf(&buf, "    %v    %v\n", nuc, qty)
+	}
+	return buf.String()
+}
+
 func (m Material) Mass() (tot Mass) {
 	for _, qty := range m {
 		tot += qty
 	}
 	return tot
+}
+
+func (m Material) SetMass(v Mass) {
+	curr := m.Mass()
+	for nuc, qty := range m {
+		m[nuc] = qty / curr * v
+	}
 }
 
 func (m Material) EltMass(anum int) (tot Mass) {
