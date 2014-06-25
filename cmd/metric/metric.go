@@ -14,6 +14,7 @@ import (
 	"text/tabwriter"
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
+	"github.com/rwcarlsen/cyan/post"
 	"github.com/rwcarlsen/cyan/query"
 )
 
@@ -84,6 +85,18 @@ func main() {
 		fatalif(err)
 	}
 
+	// post process if necessary
+	fatalif(post.Prepare(db))
+	simids, err := post.GetSimIds(db)
+	fatalif(err)
+	for _, simid := range simids {
+		ctx := post.NewContext(db, simid)
+		err := ctx.WalkAll()
+		fatalif(err)
+	}
+	fatalif(post.Finish(db))
+
+	// run command
 	cmds.Execute(flag.Args())
 }
 
