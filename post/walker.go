@@ -106,12 +106,23 @@ func NewContext(db *sql.DB, simid []byte) *Context {
 	}
 }
 
+type AlreadyPostErr []byte
+
+func (s AlreadyPostErr) Error() string {
+	return fmt.Sprintf("SimId %x is already post processed", s)
+}
+
+func IsAlreadyPostErr(err error) bool {
+	_, ok := err.(AlreadyPostErr)
+	return ok
+}
+
 func (c *Context) init() {
 	// skip if the post processing already exists for this simid in the db
 	dummy := 0
 	err := c.QueryRow("SELECT AgentId FROM Agents WHERE SimId = ? LIMIT 1", c.Simid).Scan(&dummy)
 	if err == nil {
-		panic(fmt.Sprintf("SimId %x is already post-processed - skipping", c.Simid))
+		panic(AlreadyPostErr(c.Simid))
 	} else if err != sql.ErrNoRows {
 		panicif(err)
 	}
@@ -183,7 +194,11 @@ func (c *Context) init() {
 func (c *Context) WalkAll() (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("%v", r)
+			if er, ok := r.(error); ok {
+				err = er
+			} else {
+				err = fmt.Errorf("%v", r)
+			}
 		}
 	}()
 

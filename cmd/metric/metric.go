@@ -92,7 +92,9 @@ func main() {
 	for _, simid := range simids {
 		ctx := post.NewContext(db, simid)
 		err := ctx.WalkAll()
-		fatalif(err)
+		if !post.IsAlreadyPostErr(err) {
+			fatalif(err)
+		}
 	}
 	fatalif(post.Finish(db))
 
