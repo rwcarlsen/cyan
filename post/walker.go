@@ -109,7 +109,7 @@ func NewContext(db *sql.DB, simid []byte) *Context {
 type AlreadyPostErr []byte
 
 func (s AlreadyPostErr) Error() string {
-	return fmt.Sprintf("SimId %x is already post processed", s)
+	return fmt.Sprintf("SimId %x is already post processed", []byte(s))
 }
 
 func IsAlreadyPostErr(err error) bool {
