@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"text/template"
+	"time"
 
 	"code.google.com/p/go-uuid/uuid"
 	_ "github.com/mxk/go-sqlite/sqlite3"
@@ -19,6 +20,7 @@ import (
 )
 
 const MAX_MEMORY = 50 * 1024 * 1024
+const timeout = 30 * time.Second
 
 var resultTmpl = template.Must(template.New("results").Parse(results))
 var homeTmpl = template.Must(template.New("home").Parse(home))
@@ -55,7 +57,7 @@ func share(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func upload(w http.ResponseWriter, r *http.Request) {
+func uploadInner(w http.ResponseWriter, r *http.Request, kill chan bool) {
 	// parse database from multi part form data
 	if err := r.ParseMultipartForm(MAX_MEMORY); err != nil {
 		log.Println(err)
@@ -86,6 +88,12 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No file provided", http.StatusBadRequest)
 		log.Print("received request with no file")
 		return
+	}
+
+	select {
+	case <-kill:
+		return
+	default:
 	}
 
 	// post process the database
@@ -127,6 +135,12 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	simid := ids[0]
 	rs := &Results{}
 
+	select {
+	case <-kill:
+		return
+	default:
+	}
+
 	// create flow graph
 	combineProto := false
 	arcs, err := query.FlowGraph(db, simid, 0, -1, combineProto)
@@ -164,6 +178,12 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rs.Flowgraph = buf.String()
+
+	select {
+	case <-kill:
+		return
+	default:
+	}
 
 	// create agents table
 	rs.Agents, err = query.AllAgents(db, simid, "")
@@ -235,6 +255,12 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	select {
+	case <-kill:
+		return
+	default:
+	}
+
 	// render all results and save page
 	rs.Uid = uid
 	resultTmpl.Execute(w, rs)
@@ -247,6 +273,20 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 	resultTmpl.Execute(f, rs)
+	close(kill)
+}
+
+func upload(w http.ResponseWriter, r *http.Request) {
+	kill := make(chan bool)
+	go uploadInner(w, r, kill)
+
+	select {
+	case <-time.After(timeout):
+		close(kill)
+		http.Error(w, "operation timed out", http.StatusInternalServerError)
+		log.Print("db processing operation timed out")
+	case <-kill:
+	}
 }
 
 type ProdTrans struct {
