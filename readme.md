@@ -17,6 +17,9 @@ apt-get install golang
 
 # archlinux
 pacman -S go
+
+# macports
+port install go
 ```
 
 You should make a directory to use as your GOPATH and set the GOPATH
