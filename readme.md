@@ -8,8 +8,7 @@ all features have been validated/verified to be correct.
 ## Installation
 
 To install, you need the Go toolchain.  You can get it from
-http://golang.org/doc/install or you can use your favorite linux
-distribution's package manager:
+http://golang.org/doc/install or you can use your favorite package manager:
 
 ```
 # debain-based distros
@@ -17,6 +16,9 @@ apt-get install golang
 
 # archlinux
 pacman -S go
+
+# mac OSX with macports
+port install go
 ```
 
 You should make a directory to use as your GOPATH and set the GOPATH
