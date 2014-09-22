@@ -48,6 +48,27 @@ var (
 				  WHERE res.SimId = ? AND rc.SimId = ?;`
 )
 
+func Process(db *sql.DB) (simids [][]byte, err error) {
+	err = Prepare(db)
+	if err != nil {
+		return nil, err
+	}
+	defer Finish(db)
+
+	simids, err = GetSimIds(db)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, id := range simids {
+		ctx := NewContext(db, id)
+		if err := ctx.WalkAll(); err != nil {
+			log.Print(err)
+		}
+	}
+	return simids, nil
+}
+
 // Prepare creates necessary indexes and tables required for efficient
 // calculation of cyclus simulation inventory information.  Should be called
 // once before walking begins.
