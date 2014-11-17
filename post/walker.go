@@ -156,7 +156,8 @@ func (c *Context) init() {
 				SELECT n.SimId,n.AgentId,n.Kind,n.Spec,n.Prototype,n.ParentId,n.Lifetime,n.EnterTime,x.ExitTime
 				FROM
 					AgentEntry AS n
-					LEFT JOIN AgentExit AS x ON n.AgentId = x.AgentId AND n.SimId = x.SimId AND n.SimId = ?;`
+					LEFT JOIN AgentExit AS x ON n.AgentId = x.AgentId AND n.SimId = x.SimId
+					WHERE n.SimId = ?;`
 	_, err = tx.Exec(sql, c.Simid)
 	panicif(err)
 
