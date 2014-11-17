@@ -32,6 +32,15 @@ go get github.com/rwcarlsen/cyan/...
 
 ```
 
+To cross-compile for all major architectures/OS's supported by Go, you can use
+`xgo` (https://github.com/karalabe/xgo) - for example:
+
+```
+xgo github.com/rwcarlsen/cyan/cmd/cycpost
+```
+
+And you will get 32 and 64 bit binaries for Mac, Windows, Linux, and Arm.
+
 ## Usage
 
 There are two binary tools:
