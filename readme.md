@@ -11,7 +11,7 @@ To install, you need the Go toolchain.  You can get it from
 http://golang.org/doc/install or you can use your favorite package manager:
 
 ```
-# debain-based distros
+# debian-based distros
 apt-get install golang
 
 # archlinux
