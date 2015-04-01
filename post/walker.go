@@ -32,7 +32,8 @@ var (
 	}
 	postExecStmts = []string{
 		query.Index("Agents", "SimId", "Prototype"),
-		query.Index("Inventories", "SimId", "AgentId"),
+		query.Index("Agents", "SimId", "AgentId", "Prototype"),
+		query.Index("Inventories", "SimId", "AgentId", "StartTime", "EndTime", "Quantity"),
 		query.Index("Inventories", "SimId", "ResourceId", "StartTime"),
 		"ANALYZE;",
 	}
