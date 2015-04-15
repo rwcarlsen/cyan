@@ -8,11 +8,17 @@ extern "C" {
   int
   id_int(int nuc);
 
+  char*
+  name(int nuc);
+
   double
   decay_const(int nuc);
 
   void
   init_nuc_data(const char* fpath);
+
+  double
+  fpyield(int fromnuc, int tonuc, int source);
 
 #ifdef __cplusplus
 }
