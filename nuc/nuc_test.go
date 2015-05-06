@@ -6,6 +6,22 @@ import (
 	"testing"
 )
 
+func TestId(t *testing.T) {
+	want := Nuc(922350000)
+	got := Id("U235")
+	if got != want {
+		t.Errorf("want %v, got %v", want, got)
+	}
+}
+
+func TestIdFromInt(t *testing.T) {
+	want := Nuc(922350000)
+	got := IdFromInt(92235)
+	if got != want {
+		t.Errorf("want %v, got %v", want, got)
+	}
+}
+
 func TestFPE(t *testing.T) {
 	m := Material{
 		922350000: 1,

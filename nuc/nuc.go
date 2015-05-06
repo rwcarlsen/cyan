@@ -1,9 +1,39 @@
 package nuc
 
+/*
+#include <stdlib.h>
+#include "cnucname.h"
+*/
+import "C"
 import (
 	"bytes"
 	"fmt"
+	"unsafe"
 )
+
+var NucDataPath = ""
+
+type Nuc int
+
+func Id(nuc string) Nuc {
+	cs := C.CString(nuc)
+	defer C.free(unsafe.Pointer(cs))
+	return Nuc(C.id_str(cs))
+}
+
+func IdFromInt(nuc int) Nuc {
+	return Nuc(C.id_int(C.int(nuc)))
+}
+
+func (n Nuc) Z() int { return int(n) / 10000000 }
+func (n Nuc) A() int { return (int(n) / 10000) % 1000 }
+
+func (n Nuc) Name() string {
+	cname := C.name(C.int(n))
+	name := C.GoString(cname)
+	C.free(unsafe.Pointer(cname))
+	return name
+}
 
 const (
 	Kg = 1
@@ -23,19 +53,6 @@ const (
 
 // Mass represents a quantity in kg
 type Mass float64
-
-// Nuc describes a nuclide in ZZZAAAMMMM format.
-type Nuc int
-
-// A returns the atomic mass of a nuclide.
-func (n Nuc) A() int {
-	return (int(n) / 10000) % 1000
-}
-
-// Z returns the atomic number of a nuclide.
-func (n Nuc) Z() int {
-	return int(n) / 10000000
-}
 
 // Atoms returns the number of atoms of nuclide n for mass m.
 func Atoms(n Nuc, m Mass) float64 {
