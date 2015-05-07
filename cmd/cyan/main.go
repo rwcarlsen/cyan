@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -39,6 +40,26 @@ var cmds = NewCmdSet()
 
 // map[cmdname]sqltext
 var customSql = map[string]string{}
+
+func plot(data *bytes.Buffer, style string, xlabel, ylabel, title string) {
+	s := ""
+	s += `set xlabel '{{.Xlabel}}';`
+	s += `set ylabel '{{.Ylabel}}';`
+	s += `plot '-' u 1:2 with {{.Style}} title '{{.Title}}';`
+	s += `pause -1`
+
+	tmpl := template.Must(template.New("gnuplot").Parse(s))
+	var buf bytes.Buffer
+	config := struct{ Style, Xlabel, Ylabel, Title string }{style, xlabel, ylabel, title}
+	err := tmpl.Execute(&buf, config)
+	fatalif(err)
+
+	cmd := exec.Command("gnuplot", "-p", "-e", buf.String())
+	cmd.Stdin = data
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	fatalif(cmd.Run())
+}
 
 func init() {
 	cmds.Register("sims", "list all simulations in the database", doSims)
@@ -103,7 +124,7 @@ func main() {
 	cmds.Execute(flag.Args())
 }
 
-func doCustom(cmd string, args ...interface{}) {
+func doCustom(cmd string, args ...interface{}) *bytes.Buffer {
 	s, ok := customSql[cmd]
 	if !ok {
 		log.Fatalf("Invalid command %v", cmd)
@@ -111,7 +132,8 @@ func doCustom(cmd string, args ...interface{}) {
 	rows, err := db.Query(s, args...)
 	fatalif(err)
 
-	tw := tabwriter.NewWriter(os.Stdout, 4, 4, 1, ' ', 0)
+	var buf bytes.Buffer
+	tw := tabwriter.NewWriter(&buf, 4, 4, 1, ' ', 0)
 	cols, err := rows.Columns()
 	fatalif(err)
 	for _, c := range cols {
@@ -146,14 +168,15 @@ func doCustom(cmd string, args ...interface{}) {
 	}
 	fatalif(rows.Err())
 	fatalif(tw.Flush())
-	return
+	return &buf
 }
 
 func doSims(cmd string, args []string) {
 	initdb()
 	s := "SELECT i.SimId AS SimId,Duration,Handle,Decay FROM Info As i JOIN DecayMode AS d ON i.SimId=d.SimId WHERE i.SimId = ?"
 	customSql[cmd] = s
-	doCustom(cmd, simid)
+	buf := doCustom(cmd, simid)
+	fmt.Println(buf.String())
 }
 
 func doAgents(cmd string, args []string) {
@@ -174,12 +197,14 @@ func doAgents(cmd string, args []string) {
 		iargs = append(iargs, *proto)
 	}
 	customSql[cmd] = s
-	doCustom(cmd, iargs...)
+	buf := doCustom(cmd, iargs...)
+	fmt.Println(buf.String())
 }
 
 func doPower(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	proto := fs.String("proto", "", "filter by prototype (default is all prototypes)")
+	plotit := fs.Bool("p", false, "plot the data")
 	fs.Usage = func() {
 		log.Printf("Usage: %v", cmd)
 		fs.PrintDefaults()
@@ -201,12 +226,19 @@ func doPower(cmd string, args []string) {
 		tmpl.Execute(&buf, " AND a.prototype='"+*proto+"' ")
 	}
 	customSql[cmd] = buf.String()
-	doCustom(cmd, simid)
+
+	buff := doCustom(cmd, simid)
+	if *plotit {
+		plot(buff, "linespoints", "Time (Months)", "Power (MWe)", "Total Power Produced")
+	} else {
+		fmt.Println(buff.String())
+	}
 }
 
 func doDeployed(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	fs.Usage = func() { log.Printf("Usage: %v <prototype>", cmd); fs.PrintDefaults() }
+	plotit := fs.Bool("p", false, "plot the data")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
 		log.Fatal("must specify a prototype")
@@ -223,12 +255,18 @@ func doDeployed(cmd string, args []string) {
 		  ) AS sub ON sub.time=tl.time
 		  WHERE tl.simid=?`
 	customSql[cmd] = s
-	doCustom(cmd, simid, proto, simid)
+	buf := doCustom(cmd, simid, proto, simid)
+	if *plotit {
+		plot(buf, "linespoints", "Time (Months)", "Number "+proto+" Deployed", "Deployed Facilities")
+	} else {
+		fmt.Println(buf.String())
+	}
 }
 
 func doBuilt(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	fs.Usage = func() { log.Printf("Usage: %v <prototype>", cmd); fs.PrintDefaults() }
+	plotit := fs.Bool("p", false, "plot the data")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
 		log.Fatal("must specify a prototype")
@@ -246,7 +284,12 @@ func doBuilt(cmd string, args []string) {
 		  WHERE tl.simid=?`
 
 	customSql[cmd] = s
-	doCustom(cmd, simid, proto, simid)
+	buf := doCustom(cmd, simid, proto, simid)
+	if *plotit {
+		plot(buf, "impulses", "Time (Months)", "Number "+proto+" Built", "New Facilities Built")
+	} else {
+		fmt.Println(buf.String())
+	}
 }
 
 func doProtos(cmd string, args []string) {
@@ -257,7 +300,8 @@ func doProtos(cmd string, args []string) {
 
 	s := "SELECT DISTINCT Prototype FROM Prototypes WHERE simid=?;"
 	customSql[cmd] = s
-	doCustom(cmd, simid)
+	buf := doCustom(cmd, simid)
+	fmt.Println(buf.String())
 }
 
 func doTransCommods(cmd string, args []string) {
@@ -272,11 +316,13 @@ func doTransCommods(cmd string, args []string) {
 		  WHERE r.simid=?
           GROUP BY commodity;`
 	customSql[cmd] = s
-	doCustom(cmd, simid)
+	buf := doCustom(cmd, simid)
+	fmt.Println(buf.String())
 }
 
 func doInv(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	plotit := fs.Bool("p", false, "plot the data")
 	fs.Usage = func() {
 		log.Printf("Usage: %v <prototype>", cmd)
 		fs.PrintDefaults()
@@ -308,11 +354,17 @@ func doInv(cmd string, args []string) {
 	tmpl.Execute(&buf, nuclidefilter(*nucs))
 	fmt.Println(buf.String())
 	customSql[cmd] = buf.String()
-	doCustom(cmd, simid, proto, simid)
+	buff := doCustom(cmd, simid, proto, simid)
+	if *plotit {
+		plot(buff, "linespoints", "Time (Months)", proto+" inventory ( kg "+*nucs+")", "Inventory")
+	} else {
+		fmt.Println(buff.String())
+	}
 }
 
 func doFlow(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	plotit := fs.Bool("p", false, "plot the data")
 	fs.Usage = func() {
 		log.Printf("Usage: %v <from-prototype> <to-prototype>", cmd)
 		fs.PrintDefaults()
@@ -343,7 +395,12 @@ func doFlow(cmd string, args []string) {
 	var buf bytes.Buffer
 	tmpl.Execute(&buf, nuclidefilter(*nucs))
 	customSql[cmd] = buf.String()
-	doCustom(cmd, from, to, simid, simid)
+	buff := doCustom(cmd, from, to, simid, simid)
+	if *plotit {
+		plot(buff, "impulses", "Time (Months)", from+" --> "+to+" ( kg "+*nucs+")", "Flow")
+	} else {
+		fmt.Println(buff.String())
+	}
 }
 
 func doFlowGraph(cmd string, args []string) {
@@ -435,7 +492,8 @@ func (cs *CmdSet) Execute(args []string) {
 		for i, arg := range args[1:] {
 			blankargs[i] = arg
 		}
-		doCustom(cmd, blankargs...)
+		buf := doCustom(cmd, blankargs...)
+		fmt.Println(buf.String())
 		return
 	}
 	f(cmd, args[1:])
