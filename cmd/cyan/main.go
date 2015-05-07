@@ -83,10 +83,10 @@ func main() {
 	flag.Parse()
 
 	if *help || flag.NArg() < 1 {
-		fmt.Println("Usage: metric -db <cyclus-db> [opts] <command> [args...]")
-		fmt.Println("Calculates metrics for cyclus simulation data in a sqlite database.")
+		fmt.Println("Usage: cyan -db <cyclus-db> [flags...] <command> [flags...] [args...]")
+		fmt.Println("Computes metrics for cyclus simulation data in a sqlite database.")
 		flag.PrintDefaults()
-		fmt.Println("\nCommands:")
+		fmt.Println("\nSub-commands:")
 		for i := range cmds.Names {
 			fmt.Printf("    %v: %v\n", cmds.Names[i], cmds.Helps[i])
 		}
