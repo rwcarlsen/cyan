@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -99,9 +100,21 @@ func initdb() {
 	post.Process(db)
 }
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
+
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	if *help || flag.NArg() < 1 {
 		fmt.Println("Usage: cyan -db <cyclus-db> [flags...] <command> [flags...] [args...]")
@@ -136,33 +149,45 @@ func doCustom(cmd string, args ...interface{}) *bytes.Buffer {
 	tw := tabwriter.NewWriter(&buf, 4, 4, 1, ' ', 0)
 	cols, err := rows.Columns()
 	fatalif(err)
-	for _, c := range cols {
+
+	simidcol := -1
+	for i, c := range cols {
+		if strings.Contains(strings.ToLower(c), "simid") {
+			simidcol = i
+		}
 		_, err := tw.Write([]byte(c + "\t"))
 		fatalif(err)
 	}
 	_, err = tw.Write([]byte("\n"))
 	fatalif(err)
 
+	vs := make([]interface{}, len(cols))
+	vals := make([]*sql.NullString, len(cols))
+	for i := range vals {
+		vals[i] = &sql.NullString{}
+		vs[i] = vals[i]
+	}
+
 	for rows.Next() {
-		vs := make([]interface{}, len(cols))
-		vals := make([]*sql.NullString, len(cols))
 		for i := range vals {
-			vals[i] = &sql.NullString{}
-			vs[i] = vals[i]
+			vals[i].Valid = false
 		}
+
 		err := rows.Scan(vs...)
 		fatalif(err)
 
 		for i, v := range vals {
-			s := "NULL"
 			if v.Valid {
 				s = v.String
-				if strings.Contains(strings.ToLower(cols[i]), "simid") {
+				if i == simidcol {
 					s = uuid.UUID(v.String).String()
 				}
+				tw.Write([]byte(s + "\t"))
+			} else {
+				tw.Write([]byte("NULL\t"))
 			}
-			fmt.Fprintf(tw, "%v\t", s)
 		}
+
 		_, err = tw.Write([]byte("\n"))
 		fatalif(err)
 	}
@@ -335,24 +360,36 @@ func doInv(cmd string, args []string) {
 	initdb()
 
 	proto := fs.Arg(0)
-	s := `SELECT tl.Time AS Time,TOTAL(sub.qty) AS Quantity FROM timelist as tl
-          LEFT JOIN (
-			 SELECT tl.simid AS simid, tl.Time as time,TOTAL(inv.Quantity*c.MassFrac) AS qty
-			 FROM timelist as tl
-             JOIN inventories as inv on inv.starttime <= tl.time and inv.endtime > tl.time AND tl.simid=inv.simid
-             JOIN agents as a on a.agentid=inv.agentid AND a.simid=inv.simid
-             JOIN compositions as c on c.qualid=inv.qualid AND c.simid=inv.simid
-             WHERE a.simid=? AND a.prototype=? {{.}}
-             GROUP BY tl.Time
-          ) AS sub ON sub.time=tl.time AND sub.simid=tl.simid
-		  WHERE tl.simid=?
-		  GROUP BY tl.Time;
-          `
+
+	filter := nuclidefilter(*nucs)
+	s := ""
+	if filter != "" {
+		s = `SELECT tl.Time AS Time,IFNULL(sub.qty, 0) FROM timelist as tl
+		     LEFT JOIN (
+				SELECT tl.Time as time,SUM(inv.Quantity*c.MassFrac) AS qty
+			    FROM timelist as tl
+			    JOIN inventories as inv on UNLIKELY(inv.starttime <= tl.time AND inv.endtime > tl.time) AND tl.simid=inv.simid
+			    JOIN agents as a on a.agentid=inv.agentid AND a.simid=inv.simid
+			    JOIN compositions as c on c.qualid=inv.qualid AND c.simid=inv.simid
+			    WHERE a.simid=? AND a.prototype=? {{.}}
+			    GROUP BY tl.Time
+			 ) AS sub ON sub.time=tl.time WHERE tl.simid=?`
+	} else {
+		s = `SELECT tl.Time AS Time,IFNULL(sub.qty, 0) FROM timelist as tl
+		     LEFT JOIN (
+				SELECT tl.Time as time,SUM(inv.Quantity) AS qty
+			    FROM timelist as tl
+			    JOIN inventories as inv on UNLIKELY(inv.starttime <= tl.time AND inv.endtime > tl.time) AND tl.simid=inv.simid
+			    JOIN agents as a on a.agentid=inv.agentid AND a.simid=inv.simid
+			    WHERE a.simid=? AND a.prototype=? {{.}}
+			    GROUP BY tl.Time
+			 ) AS sub ON sub.time=tl.time
+			 WHERE tl.simid=?`
+	}
 
 	tmpl := template.Must(template.New("sql").Parse(s))
 	var buf bytes.Buffer
-	tmpl.Execute(&buf, nuclidefilter(*nucs))
-	fmt.Println(buf.String())
+	tmpl.Execute(&buf, filter)
 	customSql[cmd] = buf.String()
 	buff := doCustom(cmd, simid, proto, simid)
 	if *plotit {

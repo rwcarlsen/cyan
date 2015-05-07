@@ -20,7 +20,7 @@ func Id(nuc string) (Nuc, error) {
 	defer C.free(unsafe.Pointer(cs))
 	n := Nuc(C.id_str(cs))
 	if n < 0 {
-		return 0, fmt.Errorf("'%v' is not a valid nuclide", n)
+		return 0, fmt.Errorf("'%v' is not a valid nuclide", nuc)
 	}
 	return n, nil
 }
@@ -28,7 +28,7 @@ func Id(nuc string) (Nuc, error) {
 func IdFromInt(nuc int) (Nuc, error) {
 	n := Nuc(C.id_int(C.int(nuc)))
 	if n < 0 {
-		return 0, fmt.Errorf("'%v' is not a valid nuclide", n)
+		return 0, fmt.Errorf("'%v' is not a valid nuclide", nuc)
 	}
 	return n, nil
 }

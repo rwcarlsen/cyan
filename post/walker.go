@@ -35,6 +35,7 @@ var (
 		query.Index("Agents", "SimId", "AgentId", "Prototype"),
 		query.Index("Inventories", "SimId", "AgentId", "StartTime", "EndTime", "Quantity"),
 		query.Index("Inventories", "SimId", "ResourceId", "StartTime"),
+		query.Index("Inventories", "SimId", "StartTime", "EndTime", "ResourceId", "Quantity"),
 		"ANALYZE;",
 	}
 	dumpSql    = "INSERT INTO Inventories VALUES (?,?,?,?,?,?,?);"
