@@ -8,7 +8,7 @@ import (
 
 func TestId(t *testing.T) {
 	want := Nuc(922350000)
-	got := Id("U235")
+	got, _ := Id("U235")
 	if got != want {
 		t.Errorf("want %v, got %v", want, got)
 	}
@@ -16,7 +16,7 @@ func TestId(t *testing.T) {
 
 func TestIdFromInt(t *testing.T) {
 	want := Nuc(922350000)
-	got := IdFromInt(92235)
+	got, _ := IdFromInt(92235)
 	if got != want {
 		t.Errorf("want %v, got %v", want, got)
 	}

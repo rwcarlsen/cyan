@@ -15,14 +15,22 @@ var NucDataPath = ""
 
 type Nuc int
 
-func Id(nuc string) Nuc {
+func Id(nuc string) (Nuc, error) {
 	cs := C.CString(nuc)
 	defer C.free(unsafe.Pointer(cs))
-	return Nuc(C.id_str(cs))
+	n := Nuc(C.id_str(cs))
+	if n < 0 {
+		return 0, fmt.Errorf("'%v' is not a valid nuclide", n)
+	}
+	return n, nil
 }
 
-func IdFromInt(nuc int) Nuc {
-	return Nuc(C.id_int(C.int(nuc)))
+func IdFromInt(nuc int) (Nuc, error) {
+	n := Nuc(C.id_int(C.int(nuc)))
+	if n < 0 {
+		return 0, fmt.Errorf("'%v' is not a valid nuclide", n)
+	}
+	return n, nil
 }
 
 func (n Nuc) Z() int { return int(n) / 10000000 }

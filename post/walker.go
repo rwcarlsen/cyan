@@ -54,18 +54,26 @@ func Process(db *sql.DB) (simids [][]byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	defer Finish(db)
 
 	simids, err = GetSimIds(db)
 	if err != nil {
 		return nil, err
 	}
 
+	nprocessed := 0
 	for _, id := range simids {
 		ctx := NewContext(db, id)
-		if err := ctx.WalkAll(); err != nil {
-			log.Print(err)
+		if err2 := ctx.WalkAll(); err2 != nil {
+			if IsAlreadyPostErr(err2) {
+			} else {
+				err = err2
+			}
+		} else {
+			nprocessed++
 		}
+	}
+	if nprocessed > 0 {
+		Finish(db)
 	}
 	return simids, nil
 }
