@@ -44,7 +44,8 @@ func init() {
 	cmds.Register("sims", "list all simulations in the database", doSims)
 	cmds.Register("agents", "list all agents in the simulation", doAgents)
 	cmds.Register("protos", "list all prototypes in the simulation", doProtos)
-	cmds.Register("transcommods", "list all prototypes in the simulation", doTransCommods)
+	cmds.Register("transcommods", "list transaction counts and quantities for each commodity", doTransCommods)
+	cmds.Register("power", "print a time-series of power produced", doPower)
 	cmds.Register("deployed", "print a time-series of a prototype's total active deployments", doDeployed)
 	cmds.Register("built", "print a time-series of a new builds of a prototype", doBuilt)
 	cmds.Register("inv", "print a time series of agents' inventory", doInv)
@@ -174,6 +175,33 @@ func doAgents(cmd string, args []string) {
 	}
 	customSql[cmd] = s
 	doCustom(cmd, iargs...)
+}
+
+func doPower(cmd string, args []string) {
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	proto := fs.String("proto", "", "filter by prototype (default is all prototypes)")
+	fs.Usage = func() {
+		log.Printf("Usage: %v", cmd)
+		fs.PrintDefaults()
+	}
+	fs.Parse(args)
+	initdb()
+
+	s := `SELECT tl.Time AS Time,TOTAL(Value) AS Power FROM timeseriespower AS p
+		  LEFT JOIN timelist as tl ON tl.Time=p.Time AND tl.simid=p.simid
+          LEFT JOIN agents as a on a.agentid=p.agentid AND a.simid=p.simid
+          WHERE tl.simid=? {{.}}
+          GROUP BY tl.Time`
+
+	tmpl := template.Must(template.New("sql").Parse(s))
+	var buf bytes.Buffer
+	if *proto == "" {
+		tmpl.Execute(&buf, "")
+	} else {
+		tmpl.Execute(&buf, " AND a.prototype='"+*proto+"' ")
+	}
+	customSql[cmd] = buf.String()
+	doCustom(cmd, simid)
 }
 
 func doDeployed(cmd string, args []string) {
