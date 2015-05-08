@@ -46,7 +46,7 @@ func plot(data *bytes.Buffer, style string, xlabel, ylabel, title string) {
 	s := ""
 	s += `set xlabel '{{.Xlabel}}';`
 	s += `set ylabel '{{.Ylabel}}';`
-	s += `plot '-' u 1:2 with {{.Style}} title '{{.Title}}';`
+	s += `plot '-' every ::2 using 1:2 with {{.Style}} title '{{.Title}}';`
 	s += `pause -1`
 
 	tmpl := template.Must(template.New("gnuplot").Parse(s))
@@ -360,7 +360,7 @@ func doTrans(cmd string, args []string) {
           JOIN resources AS r ON t.resourceid=r.resourceid AND r.simid=t.simid
           JOIN agents AS send ON t.senderid=send.agentid AND send.simid=t.simid
           JOIN agents AS recv ON t.receiverid=recv.agentid AND recv.simid=t.simid
-          WHERE t.simid=? {{index . 0}} {{index . 1}} {{index . 3}}`
+          WHERE t.simid=? {{index . 0}} {{index . 1}} {{index . 2}}`
 
 	filters := make([]string, 3)
 	iargs := []interface{}{simid}
@@ -373,8 +373,8 @@ func doTrans(cmd string, args []string) {
 		iargs = append(iargs, *to)
 	}
 	if *commod != "" {
-		filters[2] = "AND t.commod=?"
-		iargs = append(iargs, *to)
+		filters[2] = "AND t.commodity=?"
+		iargs = append(iargs, *commod)
 	}
 
 	tmpl := template.Must(template.New("sql").Parse(s))
@@ -442,39 +442,56 @@ func doInv(cmd string, args []string) {
 func doFlow(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	plotit := fs.Bool("p", false, "plot the data")
+	commod := fs.String("commod", "", "filter by a commodity")
+	from := fs.String("from", "", "filter by supplying prototype")
+	to := fs.String("to", "", "filter by receiving prototype")
 	nucs := fs.String("nucs", "", "filter by comma separated `nuclide`s")
 	fs.Usage = func() {
-		log.Printf("Usage: %v <from-prototype> <to-prototype>", cmd)
+		log.Printf("Usage: %v", cmd)
 		fs.PrintDefaults()
 	}
 	fs.Parse(args)
-	if fs.NArg() < 2 {
-		log.Fatal("must specify a source and destination prototype")
-	}
 	initdb()
 
-	from, to := fs.Arg(0), fs.Arg(1)
 	s := `SELECT tl.Time,TOTAL(sub.qty) FROM timelist as tl
           LEFT JOIN (
              SELECT t.simid AS simid,t.time as time,SUM(c.massfrac*r.quantity) as qty
-			 FROM transactions as t
+             FROM transactions as t
              JOIN resources as r ON t.resourceid=r.resourceid AND r.simid=t.simid
              JOIN agents as send ON t.senderid=send.agentid AND send.simid=t.simid
              JOIN agents as recv ON t.receiverid=recv.agentid AND recv.simid=t.simid
              JOIN compositions as c ON c.qualid=r.qualid AND c.simid=r.simid
-             WHERE send.prototype=? AND recv.prototype=? {{.}} AND t.simid=?
+             WHERE t.simid=? {{index . 0}} {{index . 1}} {{index . 2}} {{index . 3}}
              GROUP BY t.time
           ) AS sub ON tl.time=sub.time AND tl.simid=sub.simid
-		  WHERE tl.simid=?
-		  GROUP BY tl.Time;
+          WHERE tl.simid=?
+          GROUP BY tl.Time;
         `
+
+	filters := make([]string, 4)
+	iargs := []interface{}{simid}
+	if *from != "" {
+		filters[0] = "AND send.prototype=?"
+		iargs = append(iargs, *from)
+	}
+	if *to != "" {
+		filters[1] = "AND recv.prototype=?"
+		iargs = append(iargs, *to)
+	}
+	if *commod != "" {
+		filters[2] = "AND t.commodity=?"
+		iargs = append(iargs, *commod)
+	}
+	filters[3] = " " + nuclidefilter(*nucs)
+	iargs = append(iargs, simid)
+
 	tmpl := template.Must(template.New("sql").Parse(s))
 	var buf bytes.Buffer
-	tmpl.Execute(&buf, nuclidefilter(*nucs))
+	tmpl.Execute(&buf, filters)
 	customSql[cmd] = buf.String()
-	buff := doCustom(cmd, from, to, simid, simid)
+	buff := doCustom(cmd, iargs...)
 	if *plotit {
-		plot(buff, "impulses", "Time (Months)", from+" --> "+to+" ( kg "+*nucs+")", "Flow")
+		plot(buff, "impulses", "Time (Months)", "Quantity Transacted ( kg "+*nucs+")", "Flow")
 	} else {
 		fmt.Print(buff.String())
 	}
