@@ -66,7 +66,8 @@ func init() {
 	cmds.Register("sims", "list all simulations in the database", doSims)
 	cmds.Register("agents", "list all agents in the simulation", doAgents)
 	cmds.Register("protos", "list all prototypes in the simulation", doProtos)
-	cmds.Register("transcommods", "list transaction counts and quantities for each commodity", doTransCommods)
+	cmds.Register("commods", "show commodities with respective transaction counts and quantities", doCommods)
+	cmds.Register("trans", "print a time-series of transactions over time (by quantity)", doTrans)
 	cmds.Register("power", "print a time-series of power produced", doPower)
 	cmds.Register("deployed", "print a time-series of a prototype's total active deployments", doDeployed)
 	cmds.Register("built", "print a time-series of a new builds of a prototype", doBuilt)
@@ -329,7 +330,7 @@ func doProtos(cmd string, args []string) {
 	fmt.Println(buf.String())
 }
 
-func doTransCommods(cmd string, args []string) {
+func doCommods(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	fs.Usage = func() { log.Printf("Usage: %v", cmd); fs.PrintDefaults() }
 	fs.Parse(args)
@@ -343,6 +344,45 @@ func doTransCommods(cmd string, args []string) {
 	customSql[cmd] = s
 	buf := doCustom(cmd, simid)
 	fmt.Println(buf.String())
+}
+
+func doTrans(cmd string, args []string) {
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	fs.Usage = func() { log.Printf("Usage: %v", cmd); fs.PrintDefaults() }
+	from := fs.String("from", "", "filter by supplying prototype")
+	to := fs.String("to", "", "filter by receiving prototype")
+	commod := fs.String("commod", "", "filter by a commodity")
+	fs.Parse(args)
+	initdb()
+
+	s := `SELECT t.time AS Time,t.SenderId AS SenderId,send.Prototype AS SenderProto,t.ReceiverId AS ReceiverId,recv.Prototype AS ReceiverProto,t.Commodity AS Commodity,r.Quantity AS Quantity
+		  FROM transactions AS t
+          JOIN resources AS r ON t.resourceid=r.resourceid AND r.simid=t.simid
+          JOIN agents AS send ON t.senderid=send.agentid AND send.simid=t.simid
+          JOIN agents AS recv ON t.receiverid=recv.agentid AND recv.simid=t.simid
+          WHERE t.simid=? {{index . 0}} {{index . 1}} {{index . 3}}`
+
+	filters := make([]string, 3)
+	iargs := []interface{}{simid}
+	if *from != "" {
+		filters[0] = "AND send.prototype=?"
+		iargs = append(iargs, *from)
+	}
+	if *to != "" {
+		filters[1] = "AND recv.prototype=?"
+		iargs = append(iargs, *to)
+	}
+	if *commod != "" {
+		filters[2] = "AND t.commod=?"
+		iargs = append(iargs, *to)
+	}
+
+	tmpl := template.Must(template.New("sql").Parse(s))
+	var buf bytes.Buffer
+	tmpl.Execute(&buf, filters)
+	customSql[cmd] = buf.String()
+	buff := doCustom(cmd, iargs...)
+	fmt.Println(buff.String())
 }
 
 func doInv(cmd string, args []string) {
@@ -402,11 +442,11 @@ func doInv(cmd string, args []string) {
 func doFlow(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	plotit := fs.Bool("p", false, "plot the data")
+	nucs := fs.String("nucs", "", "filter by comma separated `nuclide`s")
 	fs.Usage = func() {
 		log.Printf("Usage: %v <from-prototype> <to-prototype>", cmd)
 		fs.PrintDefaults()
 	}
-	nucs := fs.String("nucs", "", "filter by comma separated `nuclide`s")
 	fs.Parse(args)
 	if fs.NArg() < 2 {
 		log.Fatal("must specify a source and destination prototype")
