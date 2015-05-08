@@ -202,7 +202,7 @@ func doSims(cmd string, args []string) {
 	s := "SELECT i.SimId AS SimId,Duration,Handle,Decay FROM Info As i JOIN DecayMode AS d ON i.SimId=d.SimId WHERE i.SimId = ?"
 	customSql[cmd] = s
 	buf := doCustom(cmd, simid)
-	fmt.Println(buf.String())
+	fmt.Print(buf.String())
 }
 
 func doAgents(cmd string, args []string) {
@@ -224,7 +224,7 @@ func doAgents(cmd string, args []string) {
 	}
 	customSql[cmd] = s
 	buf := doCustom(cmd, iargs...)
-	fmt.Println(buf.String())
+	fmt.Print(buf.String())
 }
 
 func doPower(cmd string, args []string) {
@@ -257,7 +257,7 @@ func doPower(cmd string, args []string) {
 	if *plotit {
 		plot(buff, "linespoints", "Time (Months)", "Power (MWe)", "Total Power Produced")
 	} else {
-		fmt.Println(buff.String())
+		fmt.Print(buff.String())
 	}
 }
 
@@ -285,7 +285,7 @@ func doDeployed(cmd string, args []string) {
 	if *plotit {
 		plot(buf, "linespoints", "Time (Months)", "Number "+proto+" Deployed", "Deployed Facilities")
 	} else {
-		fmt.Println(buf.String())
+		fmt.Print(buf.String())
 	}
 }
 
@@ -314,7 +314,7 @@ func doBuilt(cmd string, args []string) {
 	if *plotit {
 		plot(buf, "impulses", "Time (Months)", "Number "+proto+" Built", "New Facilities Built")
 	} else {
-		fmt.Println(buf.String())
+		fmt.Print(buf.String())
 	}
 }
 
@@ -327,7 +327,7 @@ func doProtos(cmd string, args []string) {
 	s := "SELECT DISTINCT Prototype FROM Prototypes WHERE simid=?;"
 	customSql[cmd] = s
 	buf := doCustom(cmd, simid)
-	fmt.Println(buf.String())
+	fmt.Print(buf.String())
 }
 
 func doCommods(cmd string, args []string) {
@@ -343,7 +343,7 @@ func doCommods(cmd string, args []string) {
           GROUP BY commodity;`
 	customSql[cmd] = s
 	buf := doCustom(cmd, simid)
-	fmt.Println(buf.String())
+	fmt.Print(buf.String())
 }
 
 func doTrans(cmd string, args []string) {
@@ -382,7 +382,7 @@ func doTrans(cmd string, args []string) {
 	tmpl.Execute(&buf, filters)
 	customSql[cmd] = buf.String()
 	buff := doCustom(cmd, iargs...)
-	fmt.Println(buff.String())
+	fmt.Print(buff.String())
 }
 
 func doInv(cmd string, args []string) {
@@ -435,7 +435,7 @@ func doInv(cmd string, args []string) {
 	if *plotit {
 		plot(buff, "linespoints", "Time (Months)", proto+" inventory ( kg "+*nucs+")", "Inventory")
 	} else {
-		fmt.Println(buff.String())
+		fmt.Print(buff.String())
 	}
 }
 
@@ -476,7 +476,7 @@ func doFlow(cmd string, args []string) {
 	if *plotit {
 		plot(buff, "impulses", "Time (Months)", from+" --> "+to+" ( kg "+*nucs+")", "Flow")
 	} else {
-		fmt.Println(buff.String())
+		fmt.Print(buff.String())
 	}
 }
 
@@ -570,7 +570,7 @@ func (cs *CmdSet) Execute(args []string) {
 			blankargs[i] = arg
 		}
 		buf := doCustom(cmd, blankargs...)
-		fmt.Println(buf.String())
+		fmt.Print(buf.String())
 		return
 	}
 	f(cmd, args[1:])
