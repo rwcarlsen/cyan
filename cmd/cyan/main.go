@@ -67,6 +67,7 @@ func init() {
 	cmds.Register("agents", "list all agents in the simulation", doAgents)
 	cmds.Register("protos", "list all prototypes in the simulation", doProtos)
 	cmds.Register("commods", "show commodities with respective transaction counts and quantities", doCommods)
+	cmds.Register("table", "print out the contents of a specific table", doTable)
 	cmds.Register("trans", "print a time-series of transactions over time (by quantity)", doTrans)
 	cmds.Register("power", "print a time-series of power produced", doPower)
 	cmds.Register("deployed", "print a time-series of a prototype's total active deployments", doDeployed)
@@ -224,6 +225,21 @@ func doAgents(cmd string, args []string) {
 	}
 	customSql[cmd] = s
 	buf := doCustom(cmd, iargs...)
+	fmt.Print(buf.String())
+}
+
+func doTable(cmd string, args []string) {
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	fs.Usage = func() {
+		log.Printf("Usage: %v <table-name>", cmd)
+		fs.PrintDefaults()
+	}
+	fs.Parse(args)
+	initdb()
+
+	s := "SELECT * FROM " + fs.Arg(0) + " WHERE SimId = ?"
+	customSql[cmd] = s
+	buf := doCustom(cmd, simid)
 	fmt.Print(buf.String())
 }
 
