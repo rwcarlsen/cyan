@@ -391,18 +391,22 @@ func doTrans(cmd string, args []string) {
 	fs.Usage = func() { log.Printf("Usage: %v", cmd); fs.PrintDefaults() }
 	from := fs.String("from", "", "filter by supplying prototype")
 	to := fs.String("to", "", "filter by receiving prototype")
+	nucs := fs.String("nucs", "", "filter by comma separated `nuclide`s")
 	commod := fs.String("commod", "", "filter by a commodity")
 	fs.Parse(args)
 	initdb()
 
-	s := `SELECT t.time AS Time,t.SenderId AS SenderId,send.Prototype AS SenderProto,t.ReceiverId AS ReceiverId,recv.Prototype AS ReceiverProto,t.Commodity AS Commodity,r.Quantity AS Quantity
+	s := `SELECT t.time AS Time,t.SenderId AS SenderId,send.Prototype AS SenderProto,t.ReceiverId AS ReceiverId,recv.Prototype AS ReceiverProto,t.Commodity AS Commodity,SUM(r.Quantity*c.MassFrac) AS Quantity
 		  FROM transactions AS t
           JOIN resources AS r ON t.resourceid=r.resourceid AND r.simid=t.simid
           JOIN agents AS send ON t.senderid=send.agentid AND send.simid=t.simid
           JOIN agents AS recv ON t.receiverid=recv.agentid AND recv.simid=t.simid
-          WHERE t.simid=? {{index . 0}} {{index . 1}} {{index . 2}}`
+          JOIN compositions AS c ON c.qualid=r.qualid AND c.simid=t.simid
+          WHERE t.simid=? {{index . 0}} {{index . 1}} {{index . 2}} {{index . 3}}
+		  GROUP BY t.transactionid
+		  `
 
-	filters := make([]string, 3)
+	filters := make([]string, 4)
 	iargs := []interface{}{simid}
 	if *from != "" {
 		filters[0] = "AND send.prototype=?"
@@ -416,6 +420,7 @@ func doTrans(cmd string, args []string) {
 		filters[2] = "AND t.commodity=?"
 		iargs = append(iargs, *commod)
 	}
+	filters[3] = nuclidefilter(*nucs)
 
 	tmpl := template.Must(template.New("sql").Parse(s))
 	var buf bytes.Buffer
@@ -428,11 +433,11 @@ func doTrans(cmd string, args []string) {
 func doInv(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	plotit := fs.Bool("p", false, "plot the data")
+	nucs := fs.String("nucs", "", "filter by comma separated `nuclide`s")
 	fs.Usage = func() {
 		log.Printf("Usage: %v <prototype>", cmd)
 		fs.PrintDefaults()
 	}
-	nucs := fs.String("nucs", "", "filter by comma separated `nuclide`s")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
 		log.Fatal("must specify a prototype")
@@ -493,10 +498,10 @@ func doFlow(cmd string, args []string) {
 	fs.Parse(args)
 	initdb()
 
-	s := `SELECT tl.Time,TOTAL(sub.qty) FROM timelist as tl
+	s := `SELECT tl.Time AS Time,TOTAL(sub.qty) AS Quantity FROM timelist as tl
           LEFT JOIN (
              SELECT t.simid AS simid,t.time as time,SUM(c.massfrac*r.quantity) as qty
-             FROM transactions as t
+             FROM transactions AS t
              JOIN resources as r ON t.resourceid=r.resourceid AND r.simid=t.simid
              JOIN agents as send ON t.senderid=send.agentid AND send.simid=t.simid
              JOIN agents as recv ON t.receiverid=recv.agentid AND recv.simid=t.simid
