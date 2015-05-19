@@ -63,6 +63,7 @@ func plot(data *bytes.Buffer, style string, xlabel, ylabel, title string) {
 }
 
 func init() {
+	cmds.Register("infile", "print out the simulation's input file", doInfile)
 	cmds.Register("sims", "list all simulations in the database", doSims)
 	cmds.Register("agents", "list all agents in the simulation", doAgents)
 	cmds.Register("protos", "list all prototypes in the simulation", doProtos)
@@ -199,11 +200,34 @@ func doCustom(cmd string, args ...interface{}) *bytes.Buffer {
 }
 
 func doSims(cmd string, args []string) {
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	fs.Usage = func() {
+		log.Printf("Usage: %v", cmd)
+		fs.PrintDefaults()
+	}
+	fs.Parse(args)
 	initdb()
 	s := "SELECT i.SimId AS SimId,Duration,Handle,Decay FROM Info As i JOIN DecayMode AS d ON i.SimId=d.SimId WHERE i.SimId = ?"
 	customSql[cmd] = s
 	buf := doCustom(cmd, simid)
 	fmt.Print(buf.String())
+}
+
+func doInfile(cmd string, args []string) {
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	fs.Usage = func() {
+		log.Printf("Usage: %v", cmd)
+		fs.PrintDefaults()
+	}
+	fs.Parse(args)
+	initdb()
+	s := "SELECT data FROM inputfiles WHERE simid=?;"
+	customSql[cmd] = s
+	buf := doCustom(cmd, simid)
+	data := buf.String()
+	data = strings.Replace(data, "Data", "", 1)
+	data = strings.TrimLeft(data, "\r\n\t ")
+	fmt.Print(data)
 }
 
 func doAgents(cmd string, args []string) {
