@@ -516,7 +516,7 @@ func doInv(cmd string, args []string) {
 	s := ""
 	if filter != "" {
 		s = `
-SELECT tl.Time AS Time,IFNULL(sub.qty, 0) FROM timelist as tl
+SELECT tl.Time AS Time,IFNULL(sub.qty, 0) AS Quantity FROM timelist as tl
 LEFT JOIN (
 	SELECT tl.Time as time,SUM(inv.Quantity*c.MassFrac) AS qty
 	FROM inventories as inv
@@ -530,7 +530,7 @@ WHERE tl.simid=?
 `
 	} else {
 		s = `
-SELECT tl.Time AS Time,IFNULL(sub.qty, 0)
+SELECT tl.Time AS Time,IFNULL(sub.qty, 0) AS Quantity
 FROM timelist as tl
 LEFT JOIN (
 	SELECT tl.Time as time,SUM(inv.Quantity) AS qty
