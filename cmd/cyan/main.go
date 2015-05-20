@@ -520,8 +520,8 @@ func doInv(cmd string, args []string) {
 SELECT tl.Time AS Time,IFNULL(sub.qty, 0) FROM timelist as tl
 LEFT JOIN (
 	SELECT tl.Time as time,SUM(inv.Quantity*c.MassFrac) AS qty
-	FROM timelist as tl
-	JOIN inventories as inv on UNLIKELY(inv.starttime <= tl.time AND inv.endtime > tl.time) AND tl.simid=inv.simid
+	FROM inventories as inv
+	JOIN timelist as tl ON UNLIKELY(inv.starttime <= tl.time) AND inv.endtime > tl.time AND tl.simid=inv.simid
 	JOIN agents as a on a.agentid=inv.agentid AND a.simid=inv.simid
 	JOIN compositions as c on c.qualid=inv.qualid AND c.simid=inv.simid
 	WHERE a.simid=? AND a.prototype=? {{.}}
@@ -535,8 +535,8 @@ SELECT tl.Time AS Time,IFNULL(sub.qty, 0)
 FROM timelist as tl
 LEFT JOIN (
 	SELECT tl.Time as time,SUM(inv.Quantity) AS qty
-	FROM timelist as tl
-	JOIN inventories as inv on UNLIKELY(inv.starttime <= tl.time AND inv.endtime > tl.time) AND tl.simid=inv.simid
+	FROM inventories as inv
+	JOIN timelist as tl ON UNLIKELY(inv.starttime <= tl.time) AND inv.endtime > tl.time AND tl.simid=inv.simid
 	JOIN agents as a on a.agentid=inv.agentid AND a.simid=inv.simid
 	WHERE a.simid=? AND a.prototype=? {{.}}
 	GROUP BY tl.Time
