@@ -16,9 +16,8 @@ import (
 	"text/tabwriter"
 	"text/template"
 
-	"code.google.com/p/go-uuid/uuid"
-
-	_ "github.com/mxk/go-sqlite/sqlite3"
+	"github.com/rwcarlsen/cyan/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
+	_ "github.com/rwcarlsen/cyan/Godeps/_workspace/src/github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/nuc"
 	"github.com/rwcarlsen/cyan/post"
 	"github.com/rwcarlsen/cyan/query"

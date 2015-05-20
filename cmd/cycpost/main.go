@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	_ "github.com/mxk/go-sqlite/sqlite3"
+	_ "github.com/rwcarlsen/cyan/Godeps/_workspace/src/github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/post"
 )
 

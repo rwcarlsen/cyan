@@ -24,6 +24,7 @@ var (
 		"CREATE TABLE IF NOT EXISTS TimeList (SimId BLOB, Time INTEGER);",
 		"CREATE TABLE IF NOT EXISTS Transactions (SimId BLOB, TransactionId INTEGER, SenderId INTEGER, ReceiverId INTEGER, ResourceId INTEGER, Commodity TEXT, Time INTEGER);",
 		query.Index("TimeList", "Time"),
+		query.Index("TimeList", "SimId", "Time"),
 		query.Index("Resources", "SimId", "ResourceId", "QualId"),
 		query.Index("Compositions", "SimId", "QualId", "NucId"),
 		query.Index("Transactions", "SimId", "ResourceId"),
