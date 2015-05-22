@@ -24,7 +24,6 @@ import (
 )
 
 var (
-	help      = flag.Bool("h", false, "print this help message")
 	custom    = flag.String("custom", "", "path to custom sql query spec file")
 	showquery = flag.Bool("query", false, "show query SQL for a subcommand instead of executing it")
 	dbname    = flag.String("db", "", "cyclus sqlite database to query")
@@ -108,9 +107,18 @@ var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 func main() {
 	log.SetFlags(0)
+	flag.CommandLine.Usage = func() {
+		fmt.Println("Usage: cyan [-db <cyclus-db>] [flags...] <command> [flags...] [args...]")
+		fmt.Println("Computes metrics for cyclus simulation data in a sqlite database.")
+		fmt.Println("\nOptions:")
+		flag.CommandLine.PrintDefaults()
+		fmt.Println("\nSub-commands:")
+		for i := range cmds.Names {
+			fmt.Printf("    %v: %v\n", cmds.Names[i], cmds.Helps[i])
+		}
+	}
 	flag.Parse()
 
-	flag.Parse()
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
@@ -120,7 +128,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	if *help || flag.NArg() < 1 {
+	if flag.NArg() < 1 {
 		fmt.Println("Usage: cyan -db <cyclus-db> [flags...] <command> [flags...] [args...]")
 		fmt.Println("Computes metrics for cyclus simulation data in a sqlite database.")
 		flag.PrintDefaults()
