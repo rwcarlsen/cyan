@@ -211,6 +211,26 @@ func doCustom(cmd string, args ...interface{}) *bytes.Buffer {
 	return &buf
 }
 
+func doEnergy(cmd string, args []string) {
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	fs.Usage = func() {
+		log.Printf("Usage: %v", cmd)
+		log.Printf("%v\n", cmds.Help(cmd))
+		fs.PrintDefaults()
+	}
+	fs.Parse(args)
+	initdb()
+	s := `
+SELECT r0.resourceid,c1.Nucid,SUM(c1.MassFrac*r0.Quantity-c0.MassFrac*r0.Quantity)
+FROM resources as r0
+JOIN resources as r1 ON r1.ResourceId=r0.Parent1 AND r1.quantity=r0.quantity AND r0.simid=r1.simid
+JOIN compositions as c0 ON c0.qualid=r0.qualid AND c0.simid=r0.simid
+JOIN compositions as c1 ON c1.qualid=r1.qualid AND c1.nucid=c0.nucid AND c1.simid=r0.simid
+WHERE r0.parent2=0 and r0.parent1 != 0
+GROUP BY c0.nucid
+`
+}
+
 func doSims(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	fs.Usage = func() {
