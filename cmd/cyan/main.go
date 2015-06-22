@@ -363,7 +363,7 @@ FROM timelist AS tl
 LEFT JOIN (
     SELECT tl.time AS time,COUNT(a.agentid) AS n
 	FROM timelist AS tl
-    LEFT JOIN agents AS a ON a.entertime <= tl.time AND (a.exittime >= tl.time OR a.exittime ISNULL) AND a.simid=tl.simid
+    LEFT JOIN agents AS a ON a.entertime <= tl.time AND (a.exittime >= tl.time OR a.exittime ISNULL) AND (tl.time < a.entertime + a.lifetime) AND a.simid=tl.simid
     WHERE a.simid=? AND a.prototype=?
     GROUP BY tl.time
 ) AS sub ON sub.time=tl.time
