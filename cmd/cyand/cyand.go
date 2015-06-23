@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/rwcarlsen/cyan/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
-	_ "github.com/rwcarlsen/cyan/Godeps/_workspace/src/github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/post"
 	"github.com/rwcarlsen/cyan/query"
+	_ "github.com/rwcarlsen/go-sqlite/sqlite3"
 )
 
 const MAX_MEMORY = 50 * 1024 * 1024
