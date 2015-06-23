@@ -9,10 +9,6 @@
 			"ImportPath": "code.google.com/p/go-uuid/uuid",
 			"Comment": "null-15",
 			"Rev": "35bc42037350f0078e3c974c6ea690f1926603ab"
-		},
-		{
-			"ImportPath": "github.com/mxk/go-sqlite/sqlite3",
-			"Rev": "3045933f3a2bf06df41418c9a5fe247921cdfeef"
 		}
 	]
 }
