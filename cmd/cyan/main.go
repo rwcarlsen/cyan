@@ -152,7 +152,7 @@ func main() {
 func doCustom(cmd string, args ...interface{}) *bytes.Buffer {
 	s, ok := customSql[cmd]
 	if !ok {
-		log.Fatalf("Invalid command %v", cmd)
+		log.Fatalf("Invalid command/query %v", cmd)
 	} else if *showquery {
 		return bytes.NewBufferString(s)
 	}
@@ -732,6 +732,7 @@ func (cs *CmdSet) Execute(args []string) {
 		for i, arg := range args[1:] {
 			blankargs[i] = arg
 		}
+		initdb()
 		buf := doCustom(cmd, blankargs...)
 		fmt.Print(buf.String())
 		return
