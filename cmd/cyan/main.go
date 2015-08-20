@@ -31,6 +31,7 @@ var (
 )
 
 var simid []byte
+var simids [][]byte
 
 var command string
 
@@ -92,7 +93,8 @@ func initdb() {
 	if *simidstr == "" {
 		ids, err := query.SimIds(db)
 		fatalif(err)
-		simid = ids[0]
+		simids = ids
+	        simid = simids[0]
 	} else {
 		simid = uuid.Parse(*simidstr)
 		if simid == nil {
@@ -227,8 +229,11 @@ JOIN DecayMode AS d ON i.SimId=d.SimId
 WHERE i.SimId = ?
 `
 	customSql[cmd] = s
-	buf := doCustom(cmd, simid)
-	fmt.Print(buf.String())
+	var buf string
+	for _, sid := range simids {
+	        buf += doCustom(cmd, sid).String()
+	}
+	fmt.Print(buf)
 }
 
 func doPost(cmd string, args []string) {
