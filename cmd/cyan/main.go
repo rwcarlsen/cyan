@@ -224,10 +224,9 @@ func doSims(cmd string, args []string) {
 SELECT i.SimId AS SimId,Duration,Handle,Decay
 FROM Info As i
 JOIN DecayMode AS d ON i.SimId=d.SimId 
-WHERE i.SimId = ?
 `
 	customSql[cmd] = s
-	buf := doCustom(cmd, simid)
+	buf := doCustom(cmd)
 	fmt.Print(buf.String())
 }
 
