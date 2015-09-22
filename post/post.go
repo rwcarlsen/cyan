@@ -7,7 +7,6 @@ import (
 	"math"
 
 	"github.com/rwcarlsen/cyan/query"
-	_ "github.com/rwcarlsen/go-sqlite/sqlite3"
 )
 
 // The number of sql commands to buffer before dumping to the output database.
