@@ -316,12 +316,14 @@ func doPower(cmd string, args []string) {
 	initdb()
 
 	s := `
-SELECT tl.Time AS Time,TOTAL(Value) AS Power
-FROM timeseriespower AS p
-LEFT JOIN timelist as tl ON tl.Time=p.Time AND tl.simid=p.simid
-LEFT JOIN agents as a on a.agentid=p.agentid AND a.simid=p.simid
-WHERE tl.simid=? {{.}}
-GROUP BY tl.Time
+SELECT tl.Time AS Time,IFNULL(sub.Power,0) AS Power
+FROM timelist as tl LEFT JOIN (
+	SELECT p.simid AS simid,p.Time AS Time,TOTAL(p.Value) AS Power
+	FROM timeseriespower AS p
+	JOIN agents as a on a.agentid=p.agentid AND a.simid=p.simid
+	WHERE p.simid=? {{.}}
+	GROUP BY p.Time
+) AS sub ON tl.time=sub.time AND tl.simid=sub.simid
 `
 
 	tmpl := template.Must(template.New("sql").Parse(s))
