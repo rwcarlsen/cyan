@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -149,19 +150,19 @@ func main() {
 	cmds.Execute(flag.Args())
 }
 
-func doCustom(cmd string, args ...interface{}) *bytes.Buffer {
+func doCustom(w io.Writer, cmd string, args ...interface{}) {
 	s, ok := customSql[cmd]
 	if !ok {
 		log.Fatalf("Invalid command/query %v", cmd)
 	} else if *showquery {
-		return bytes.NewBufferString(s)
+		fmt.Fprint(w, s)
+		return
 	}
 
 	rows, err := db.Query(s, args...)
 	fatalif(err)
 
-	var buf bytes.Buffer
-	tw := tabwriter.NewWriter(&buf, 4, 4, 1, ' ', 0)
+	tw := tabwriter.NewWriter(w, 4, 4, 1, ' ', 0)
 	cols, err := rows.Columns()
 	fatalif(err)
 
@@ -208,7 +209,6 @@ func doCustom(cmd string, args ...interface{}) *bytes.Buffer {
 	}
 	fatalif(rows.Err())
 	fatalif(tw.Flush())
-	return &buf
 }
 
 func doSims(cmd string, args []string) {
@@ -226,8 +226,7 @@ FROM Info As i
 JOIN DecayMode AS d ON i.SimId=d.SimId 
 `
 	customSql[cmd] = s
-	buf := doCustom(cmd)
-	fmt.Print(buf.String())
+	doCustom(os.Stdout, cmd)
 }
 
 func doPost(cmd string, args []string) {
@@ -253,8 +252,9 @@ func doInfile(cmd string, args []string) {
 	s := `
 SELECT data FROM inputfiles WHERE simid=?;
 `
+	var buf bytes.Buffer
 	customSql[cmd] = s
-	buf := doCustom(cmd, simid)
+	doCustom(&buf, cmd, simid)
 	data := buf.String()
 	data = strings.Replace(data, "Data", "", 1)
 	data = strings.TrimLeft(data, "\r\n\t ")
@@ -283,8 +283,7 @@ WHERE SimId = ?
 		iargs = append(iargs, *proto)
 	}
 	customSql[cmd] = s
-	buf := doCustom(cmd, iargs...)
-	fmt.Print(buf.String())
+	doCustom(os.Stdout, cmd, iargs...)
 }
 
 func doTable(cmd string, args []string) {
@@ -335,9 +334,10 @@ FROM timelist as tl LEFT JOIN (
 	}
 	customSql[cmd] = buf.String()
 
-	buff := doCustom(cmd, simid)
+	var buff bytes.Buffer
+	doCustom(&buff, cmd, simid)
 	if *plotit {
-		plot(buff, "linespoints", "Time (Months)", "Power (MWe)", "Total Power Produced")
+		plot(&buff, "linespoints", "Time (Months)", "Power (MWe)", "Total Power Produced")
 	} else {
 		fmt.Print(buff.String())
 	}
@@ -371,9 +371,10 @@ LEFT JOIN (
 WHERE tl.simid=?
 `
 	customSql[cmd] = s
-	buf := doCustom(cmd, simid, proto, simid)
+	var buf bytes.Buffer
+	doCustom(&buf, cmd, simid, proto, simid)
 	if *plotit {
-		plot(buf, "linespoints", "Time (Months)", "Number "+proto+" Deployed", "Deployed Facilities")
+		plot(&buf, "linespoints", "Time (Months)", "Number "+proto+" Deployed", "Deployed Facilities")
 	} else {
 		fmt.Print(buf.String())
 	}
@@ -408,9 +409,10 @@ WHERE tl.simid=?
 `
 
 	customSql[cmd] = s
-	buf := doCustom(cmd, simid, proto, simid)
+	var buf bytes.Buffer
+	doCustom(&buf, cmd, simid, proto, simid)
 	if *plotit {
-		plot(buf, "impulses", "Time (Months)", "Number "+proto+" Built", "New Facilities Built")
+		plot(&buf, "impulses", "Time (Months)", "Number "+proto+" Built", "New Facilities Built")
 	} else {
 		fmt.Print(buf.String())
 	}
@@ -428,8 +430,7 @@ func doProtos(cmd string, args []string) {
 
 	s := "SELECT DISTINCT Prototype FROM Prototypes WHERE simid=?;"
 	customSql[cmd] = s
-	buf := doCustom(cmd, simid)
-	fmt.Print(buf.String())
+	doCustom(os.Stdout, cmd, simid)
 }
 
 func doCommods(cmd string, args []string) {
@@ -451,8 +452,7 @@ GROUP BY commodity;
 `
 
 	customSql[cmd] = s
-	buf := doCustom(cmd, simid)
-	fmt.Print(buf.String())
+	doCustom(os.Stdout, cmd, simid)
 }
 
 func doTrans(cmd string, args []string) {
@@ -500,8 +500,7 @@ GROUP BY t.transactionid
 	var buf bytes.Buffer
 	tmpl.Execute(&buf, filters)
 	customSql[cmd] = buf.String()
-	buff := doCustom(cmd, iargs...)
-	fmt.Print(buff.String())
+	doCustom(os.Stdout, cmd, iargs...)
 }
 
 func doInv(cmd string, args []string) {
@@ -557,9 +556,10 @@ WHERE tl.simid=?
 	var buf bytes.Buffer
 	tmpl.Execute(&buf, filter)
 	customSql[cmd] = buf.String()
-	buff := doCustom(cmd, simid, proto, simid)
+	var buff bytes.Buffer
+	doCustom(&buff, cmd, simid, proto, simid)
 	if *plotit {
-		plot(buff, "linespoints", "Time (Months)", proto+" inventory ( kg "+*nucs+")", "Inventory")
+		plot(&buff, "linespoints", "Time (Months)", proto+" inventory ( kg "+*nucs+")", "Inventory")
 	} else {
 		fmt.Print(buff.String())
 	}
@@ -618,9 +618,10 @@ GROUP BY tl.Time;
 	var buf bytes.Buffer
 	tmpl.Execute(&buf, filters)
 	customSql[cmd] = buf.String()
-	buff := doCustom(cmd, iargs...)
+	var buff bytes.Buffer
+	doCustom(&buff, cmd, iargs...)
 	if *plotit {
-		plot(buff, "impulses", "Time (Months)", "Quantity Transacted ( kg "+*nucs+")", "Flow")
+		plot(&buff, "impulses", "Time (Months)", "Quantity Transacted ( kg "+*nucs+")", "Flow")
 	} else {
 		fmt.Print(buff.String())
 	}
@@ -734,8 +735,7 @@ func (cs *CmdSet) Execute(args []string) {
 			blankargs[i] = arg
 		}
 		initdb()
-		buf := doCustom(cmd, blankargs...)
-		fmt.Print(buf.String())
+		doCustom(os.Stdout, cmd, blankargs...)
 		return
 	}
 	f(cmd, args[1:])
