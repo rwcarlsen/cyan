@@ -289,17 +289,23 @@ WHERE SimId = ?
 func doTable(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	fs.Usage = func() {
-		log.Printf("Usage: %v <table-name>", cmd)
+		log.Printf("Usage: %v [table-name]", cmd)
 		log.Printf("%v\n", cmds.Help(cmd))
+		log.Printf("If no table name is given, prints a list of tables.")
 		fs.PrintDefaults()
 	}
 	fs.Parse(args)
 	initdb()
 
-	s := "SELECT * FROM " + fs.Arg(0) + " WHERE SimId = ?"
-	customSql[cmd] = s
-	buf := doCustom(cmd, simid)
-	fmt.Print(buf.String())
+	if fs.NArg() > 0 {
+		s := "SELECT * FROM " + fs.Arg(0) + " WHERE SimId = ?"
+		customSql[cmd] = s
+		doCustom(os.Stdout, cmd, simid)
+	} else {
+		s := "SELECT name FROM sqlite_master WHERE type='table';"
+		customSql[cmd] = s
+		doCustom(os.Stdout, cmd)
+	}
 }
 
 func doPower(cmd string, args []string) {
