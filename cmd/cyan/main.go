@@ -597,6 +597,7 @@ func doTrans(cmd string, args []string) {
 	}
 	from := fs.String("from", "", "filter by supplying prototype")
 	to := fs.String("to", "", "filter by receiving prototype")
+	byagent := fs.Bool("byagent", false, "switch to/from filters to be agent IDs")
 	nucs := fs.String("nucs", "", "filter by comma separated `nuclide`s")
 	commod := fs.String("commod", "", "filter by a commodity")
 	fs.Parse(args)
@@ -616,12 +617,30 @@ GROUP BY t.transactionid
 	filters := make([]string, 4)
 	iargs := []interface{}{simid}
 	if *from != "" {
-		filters[0] = "AND send.prototype=?"
-		iargs = append(iargs, *from)
+		if *byagent {
+			filters[0] = "AND t.senderid=?"
+			fromid, err := strconv.Atoi(*from)
+			if err != nil {
+				log.Fatalf("invalid agent ID (-from=%v)", *from)
+			}
+			iargs = append(iargs, fromid)
+		} else {
+			filters[0] = "AND send.prototype=?"
+			iargs = append(iargs, *from)
+		}
 	}
 	if *to != "" {
-		filters[1] = "AND recv.prototype=?"
-		iargs = append(iargs, *to)
+		if *byagent {
+			filters[1] = "AND t.receiverid=?"
+			toid, err := strconv.Atoi(*to)
+			if err != nil {
+				log.Fatalf("invalid agent ID (-to=%v)", *to)
+			}
+			iargs = append(iargs, toid)
+		} else {
+			filters[1] = "AND recv.prototype=?"
+			iargs = append(iargs, *to)
+		}
 	}
 	if *commod != "" {
 		filters[2] = "AND t.commodity=?"
@@ -704,6 +723,7 @@ func doFlow(cmd string, args []string) {
 	commod := fs.String("commod", "", "filter by a commodity")
 	from := fs.String("from", "", "filter by supplying prototype")
 	to := fs.String("to", "", "filter by receiving prototype")
+	byagent := fs.Bool("byagent", false, "switch to/from filters to be agent IDs")
 	nucs := fs.String("nucs", "", "filter by comma separated `nuclide`s")
 	fs.Usage = func() {
 		log.Printf("Usage: %v", cmd)
@@ -733,12 +753,30 @@ GROUP BY tl.Time;
 	filters := make([]string, 4)
 	iargs := []interface{}{simid}
 	if *from != "" {
-		filters[0] = "AND send.prototype=?"
-		iargs = append(iargs, *from)
+		if *byagent {
+			filters[0] = "AND t.senderid=?"
+			fromid, err := strconv.Atoi(*from)
+			if err != nil {
+				log.Fatalf("invalid agent ID (-from=%v)", *from)
+			}
+			iargs = append(iargs, fromid)
+		} else {
+			filters[0] = "AND send.prototype=?"
+			iargs = append(iargs, *from)
+		}
 	}
 	if *to != "" {
-		filters[1] = "AND recv.prototype=?"
-		iargs = append(iargs, *to)
+		if *byagent {
+			filters[1] = "AND t.receiverid=?"
+			toid, err := strconv.Atoi(*to)
+			if err != nil {
+				log.Fatalf("invalid agent ID (-to=%v)", *to)
+			}
+			iargs = append(iargs, toid)
+		} else {
+			filters[1] = "AND recv.prototype=?"
+			iargs = append(iargs, *to)
+		}
 	}
 	if *commod != "" {
 		filters[2] = "AND t.commodity=?"
