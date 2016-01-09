@@ -14,6 +14,8 @@ const DumpFreq = 100000
 
 var (
 	preExecStmts = []string{
+		"PRAGMA synchronous = OFF;",
+		"PRAGMA journal_mode = OFF;",
 		"CREATE TABLE IF NOT EXISTS TimeSeriesPower (SimId BLOB,AgentId INTEGER,Time INTEGER, Value REAL);",
 		"CREATE TABLE IF NOT EXISTS AgentExit (SimId BLOB,AgentId INTEGER,ExitTime INTEGER);",
 		"CREATE TABLE IF NOT EXISTS Compositions (SimId BLOB,QualId INTEGER,NucId INTEGER, MassFrac REAL);",
