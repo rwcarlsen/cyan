@@ -16,11 +16,11 @@ import (
 	"text/tabwriter"
 	"text/template"
 
-	"github.com/rwcarlsen/cyan/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
+	"code.google.com/p/go-uuid/uuid"
 	"github.com/rwcarlsen/cyan/nuc"
 	"github.com/rwcarlsen/cyan/post"
 	"github.com/rwcarlsen/cyan/query"
-	_ "github.com/rwcarlsen/go-sqlite/sqlite3"
+	_ "github.com/rwcarlsen/go-sqlite3"
 )
 
 var (
