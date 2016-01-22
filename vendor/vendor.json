@@ -1,0 +1,16 @@
+{
+	"comment": "need to add go-sqlite3/code directory files by hand",
+	"ignore": "test",
+	"package": [
+		{
+			"path": "code.google.com/p/go-uuid/uuid",
+			"revision": "35bc42037350",
+			"revisionTime": "2014-12-02T10:54:02-06:00"
+		},
+		{
+			"path": "github.com/rwcarlsen/go-sqlite3",
+			"revision": "c99f5b95c37624fea91357c3d0767df384aefb23",
+			"revisionTime": "2016-01-22T10:30:51+03:00"
+		}
+	]
+}
