@@ -28,6 +28,7 @@ var (
 	showquery = flag.Bool("query", false, "show query SQL for a subcommand instead of executing it")
 	dbname    = flag.String("db", "", "cyclus sqlite database to query")
 	simidstr  = flag.String("simid", "", "simulation id in hex (empty string defaults to first sim id in database")
+	noheader  = flag.Bool("noheader", false, "don't print header line with output data")
 )
 
 var simid []byte
@@ -172,15 +173,18 @@ func doCustom(w io.Writer, cmd string, args ...interface{}) {
 	fatalif(err)
 
 	simidcol := -1
-	for i, c := range cols {
-		if strings.Contains(strings.ToLower(c), "simid") {
-			simidcol = i
+	if !*noheader {
+		// write header line
+		for i, c := range cols {
+			if strings.Contains(strings.ToLower(c), "simid") {
+				simidcol = i
+			}
+			_, err := tw.Write([]byte(c + "\t"))
+			fatalif(err)
 		}
-		_, err := tw.Write([]byte(c + "\t"))
+		_, err = tw.Write([]byte("\n"))
 		fatalif(err)
 	}
-	_, err = tw.Write([]byte("\n"))
-	fatalif(err)
 
 	vs := make([]interface{}, len(cols))
 	vals := make([]*sql.NullString, len(cols))
