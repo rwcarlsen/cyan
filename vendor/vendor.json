@@ -1,5 +1,5 @@
 {
-	"comment": "need to add go-sqlite3/code directory files by hand",
+	"comment": "",
 	"ignore": "test",
 	"package": [
 		{
@@ -10,7 +10,8 @@
 		{
 			"path": "github.com/rwcarlsen/go-sqlite3",
 			"revision": "fbebdb147721e5fbe3d49283a375bd560fd1ddef",
-			"revisionTime": "2016-01-22T10:34:24-06:00"
+			"revisionTime": "2016-01-22T10:34:24-06:00",
+			"tree": true
 		}
 	]
 }
