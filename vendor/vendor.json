@@ -9,8 +9,8 @@
 		},
 		{
 			"path": "github.com/rwcarlsen/go-sqlite3",
-			"revision": "c99f5b95c37624fea91357c3d0767df384aefb23",
-			"revisionTime": "2016-01-22T10:30:51+03:00"
+			"revision": "fbebdb147721e5fbe3d49283a375bd560fd1ddef",
+			"revisionTime": "2016-01-22T10:34:24-06:00"
 		}
 	]
 }
