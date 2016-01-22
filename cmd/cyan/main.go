@@ -75,6 +75,7 @@ func init() {
 	cmds.Register("deployed", "time series total active deployments by prototype", doDeployed)
 	cmds.Register("built", "time series of new builds by prototype", doBuilt)
 	cmds.Register("decom", "time series of a decommissionings by prototype", doDecom)
+	cmds.Register("ages", "list ages of agents at a particular time step", doAges)
 	cmds.RegisterDiv("Flow")
 	cmds.Register("commods", "show commodity transaction counts and quantities", doCommods)
 	cmds.Register("flow", "time series of material transacted between agents", doFlow)
@@ -313,9 +314,41 @@ FROM Agents
 WHERE SimId = ?
 `
 	if *proto != "" {
-		s += ` AND Prototype = ?`
+		s += `AND Prototype = ?`
 		iargs = append(iargs, *proto)
 	}
+	customSql[cmd] = s
+	doCustom(os.Stdout, cmd, iargs...)
+}
+
+func doAges(cmd string, args []string) {
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	proto := fs.String("proto", "", "filter by prototype (default is all prototypes)")
+	fs.Usage = func() {
+		log.Printf("Usage: %v [time-step]", cmd)
+		log.Printf("%v\n", cmds.Help(cmd))
+		fs.PrintDefaults()
+	}
+	fs.Parse(args)
+	initdb()
+
+	t, err := strconv.Atoi(fs.Arg(0))
+	if err != nil {
+		log.Fatalf("invalid time step '%v')", fs.Arg(0))
+	}
+
+	iargs := []interface{}{t, simid, t, t}
+	s := `
+SELECT ? - a.entertime AS Age FROM Agents as a
+WHERE a.simid=?
+AND a.entertime <= ?
+AND (a.exittime >= ? OR a.exittime ISNULL)
+`
+	if *proto != "" {
+		s += `AND Prototype = ?`
+		iargs = append(iargs, *proto)
+	}
+
 	customSql[cmd] = s
 	doCustom(os.Stdout, cmd, iargs...)
 }
