@@ -8,10 +8,13 @@
 			"revisionTime": "2014-12-02T10:54:02-06:00"
 		},
 		{
+			"checksumSHA1": "3JngH5tOacjXRWKXDBu50dcLQh4=",
+			"origin": "github.com/rwcarlsen/cyan/vendor/github.com/rwcarlsen/go-sqlite3",
 			"path": "github.com/rwcarlsen/go-sqlite3",
-			"revision": "4a19b02ce576b8a519cec0b2d664e1b02a141376",
-			"revisionTime": "2016-02-22T10:34:44-06:00",
+			"revision": "37846191def3c3e1e45f0c9291f6fe4d85689193",
+			"revisionTime": "2016-04-01T16:06:29Z",
 			"tree": true
 		}
-	]
+	],
+	"rootPath": "github.com/rwcarlsen/cyan"
 }
