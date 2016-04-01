@@ -312,7 +312,7 @@ func (c *Context) walkDown(node *Node) {
 	rows.Close() // Close is idempotent - and this function is recursive.
 
 	// find resources owner changes (that occurred before children)
-	owners, times := c.getNewOwners(node.ResId)
+	owners, times := c.getNewOwners(node.OwnerId, node.ResId)
 
 	childOwner := node.OwnerId
 	if len(owners) > 0 {
@@ -345,7 +345,7 @@ func (c *Context) walkDown(node *Node) {
 	}
 }
 
-func (c *Context) getNewOwners(id int) (owners, times []int) {
+func (c *Context) getNewOwners(currowner, id int) (owners, times []int) {
 	var owner, t int
 	rows, err := c.ownerStmt.Query(id, c.Simid)
 	panicif(err)
@@ -354,7 +354,7 @@ func (c *Context) getNewOwners(id int) (owners, times []int) {
 		err := rows.Scan(&owner, &t)
 		panicif(err)
 
-		if id == owner {
+		if currowner == owner {
 			continue
 		}
 		owners = append(owners, owner)
