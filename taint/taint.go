@@ -19,6 +19,8 @@ type Node struct {
 	Child1    *Node
 	Child2    *Node
 	taintfrac float64
+	par1mark  bool
+	par2mark  bool
 }
 
 func (n *Node) String() string {
@@ -35,6 +37,7 @@ func (n *Node) str(buf *bytes.Buffer, indent int) {
 		fmt.Fprintf(buf, "{\n")
 		fmt.Fprintf(buf, ind+"    ResId:   %v,\n", n.ResId)
 		fmt.Fprintf(buf, ind+"    AgentId: %v,\n", n.AgentId)
+		fmt.Fprintf(buf, ind+"    Time:    %v,\n", n.Time)
 		fmt.Fprintf(buf, ind+"    Child1:  ")
 		n.Child1.str(buf, indent+4)
 		fmt.Fprintf(buf, ind+"    Child2:  ")
@@ -116,16 +119,8 @@ type TaintVal struct {
 	Quantity float64
 }
 
-// Taint returns a map of agent ID to a slice/time-series of taint values of
-// aggregate resource in that agent originating from the node's resource
-// object going forward down the graph through all time.
-func (n *Node) Taint() map[int][]TaintVal {
-	all := map[int][]TaintVal{}
-	n.taint(1.0)
-	n.taintnodes(all)
-	return all
-}
-
+// Locate searches for and returns the neares (shallowest) node with the given
+// Resource ID (resid).  It returns nil if not found.
 func (n *Node) Locate(resid int) *Node {
 	if n == nil {
 		return nil
@@ -139,6 +134,80 @@ func (n *Node) Locate(resid int) *Node {
 	return nil
 }
 
+func (n *Node) ResetTaint() {
+	if n == nil {
+		return
+	}
+
+	n.taintfrac = -1
+	n.par1mark = false
+	n.par2mark = false
+	n.Child1.ResetTaint()
+	n.Child2.ResetTaint()
+}
+
+// Taint returns a map of agent ID to a slice/time-series of taint values of
+// aggregate resource in that agent originating from the node's resource
+// object going forward down the graph through all time.
+func (n *Node) Taint() map[int][]TaintVal {
+	all := map[int][]TaintVal{}
+
+	n.ResetTaint()
+	n.taintfrac = 1.0
+	n.Child1.mark()
+	n.Child2.mark()
+	n.Child1.taint()
+	n.Child2.taint()
+	n.taintnodes(all)
+	return all
+}
+
+func (n *Node) marked() bool {
+	return (n != nil) && (n.par1mark || n.par2mark)
+}
+
+func (n *Node) mark() {
+	if n == nil {
+		return
+	}
+
+	if n.Parent1.marked() {
+		n.par1mark = true
+	}
+	if n.Parent2.marked() {
+		n.par2mark = true
+	}
+
+	n.Child1.mark()
+	n.Child2.mark()
+}
+
+// taint calculates the taint on each node using a recursive depth-first walk.
+func (n *Node) taint() {
+	if n == nil {
+		return
+	}
+
+	// make sure potential tainted parent nodes have been calculated before
+	// calculating taint for this node.
+	if n.par1mark && n.Parent1.taintfrac < 0 {
+		return
+	} else if n.par2mark && n.Parent2.taintfrac < 0 {
+		return
+	}
+
+	if n.Parent2 == nil { // from a transmute, move, split
+		n.taintfrac = n.Parent1.taintfrac
+	} else { // from a combine/absorb
+		n.taintfrac = (n.Parent1.taintfrac*n.Parent1.Quantity +
+			n.Parent2.taintfrac*n.Parent2.Quantity) / n.Quantity
+	}
+
+	fmt.Printf("agent %v, t %v: taint=%v\n", n.AgentId, n.Time, n.taintfrac)
+	n.Child1.taint()
+	n.Child2.taint()
+}
+
 // taintnodes walks the tree building a time-series of taint values for each
 // agent id.
 func (n *Node) taintnodes(all map[int][]TaintVal) {
@@ -147,9 +216,8 @@ func (n *Node) taintnodes(all map[int][]TaintVal) {
 	}
 
 	torec := false
-	torec = torec || (n.Child1 == nil)               // am leaf node
-	torec = torec || (n.AgentId != n.Child1.AgentId) // last before move
-	torec = torec || (n.Time != n.Child1.Time)       // last before modification
+	torec = torec || (n.Child1 == nil && n.Child2 == nil)
+	torec = torec || (n.Child1 != nil && n.Time != n.Child1.Time)
 
 	if torec {
 		prev := all[n.AgentId][n.Time]
@@ -167,18 +235,6 @@ func (n *Node) taintnodes(all map[int][]TaintVal) {
 	if n.Child2 != nil {
 		n.Child2.taintnodes(all)
 	}
-}
-
-// taint calculates the taint on each node using a recursive depth-first walk.
-func (n *Node) taint(taintfrac float64) {
-	n.taintfrac = taintfrac
-
-	if n.Child1 != nil && n.Child2 == nil { // transmute, move, or combine
-		n.Child1.taint(n.Child1.Quantity / n.Quantity)
-	} else if n.Child1 != nil && n.Child2 != nil { // split
-		n.Child1.taint(n.Child1.Quantity / n.Quantity)
-		n.Child2.taint(n.Child2.Quantity / n.Quantity)
-	} // else leaf node
 }
 
 func TreeFromDb(db *sql.DB, simid []byte) (roots []*Node) {

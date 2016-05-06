@@ -137,10 +137,10 @@ func TestNode_Taint(t *testing.T) {
 			}
 			for j := range want {
 				if got[j] != want[j] {
-					t.Errorf("    FAIL t=%v: got %v, want %v", j, got[j], want[j])
+					t.Errorf("    FAIL t=%v: got %+v, want %+v", j, got[j], want[j])
 					break
 				} else {
-					t.Logf("         t=%v: got %v", j, got[j])
+					t.Logf("         t=%v: got %+v", j, got[j])
 				}
 			}
 		}
