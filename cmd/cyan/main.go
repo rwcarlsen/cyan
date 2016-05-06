@@ -642,7 +642,7 @@ func doTrans(cmd string, args []string) {
 	initdb()
 
 	s := `
-SELECT t.time AS Time,t.SenderId AS SenderId,send.Prototype AS SenderProto,t.ReceiverId AS ReceiverId,recv.Prototype AS ReceiverProto,t.Commodity AS Commodity,SUM(r.Quantity*c.MassFrac) AS Quantity
+SELECT t.time AS Time,t.SenderId AS SenderId,send.Prototype AS SenderProto,t.ReceiverId AS ReceiverId,recv.Prototype AS ReceiverProto,t.Commodity AS Commodity,SUM(r.Quantity*c.MassFrac) AS Quantity,r.ResourceId AS ResourceId
 FROM transactions AS t
 JOIN resources AS r ON t.resourceid=r.resourceid AND r.simid=t.simid
 JOIN agents AS send ON t.senderid=send.agentid AND send.simid=t.simid
