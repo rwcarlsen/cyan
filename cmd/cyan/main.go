@@ -87,6 +87,7 @@ func init() {
 	cmds.Register("power", "time series of power produced", doPower)
 	cmds.Register("energy", "thermal energy (J) generated between 2 timesteps", doEnergy)
 	cmds.Register("created", "material created by agents between 2 timesteps", doCreated)
+	cmds.Register("taint", "taint analysis...", doTaint)
 }
 
 func initdb() {
@@ -980,4 +981,72 @@ func nuclidefilter(nucs string) string {
 		filter += fmt.Sprintf(",%v", int(nuc))
 	}
 	return filter + ") "
+}
+
+func doTaint(cmd string, args []string) {
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	fs.Usage = func() {
+		log.Printf("Usage: %v", cmd)
+		log.Printf("%v\n", cmds.Help(cmd))
+		fs.PrintDefaults()
+	}
+	t := fs.Int("time", -1, "time step for which to print taint")
+	res := fs.Int("res", -1, "resource ID of object to track")
+	fs.Parse(args)
+	initdb()
+
+	if *t == -1 || *res == -1 {
+		log.Fatalf("'-t' and '-res' flags are both required")
+	}
+
+	s := `
+SELECT t.time AS Time,t.SenderId AS SenderId,send.Prototype AS SenderProto,t.ReceiverId AS ReceiverId,recv.Prototype AS ReceiverProto,t.Commodity AS Commodity,SUM(r.Quantity*c.MassFrac) AS Quantity
+FROM transactions AS t
+JOIN resources AS r ON t.resourceid=r.resourceid AND r.simid=t.simid
+JOIN agents AS send ON t.senderid=send.agentid AND send.simid=t.simid
+JOIN agents AS recv ON t.receiverid=recv.agentid AND recv.simid=t.simid
+JOIN compositions AS c ON c.qualid=r.qualid AND c.simid=t.simid
+WHERE t.simid=? {{index . 0}} {{index . 1}} {{index . 2}} {{index . 3}}
+GROUP BY t.transactionid
+`
+
+	filters := make([]string, 4)
+	iargs := []interface{}{simid}
+	if *from != "" {
+		if *byagent {
+			filters[0] = "AND t.senderid=?"
+			fromid, err := strconv.Atoi(*from)
+			if err != nil {
+				log.Fatalf("invalid agent ID (-from=%v)", *from)
+			}
+			iargs = append(iargs, fromid)
+		} else {
+			filters[0] = "AND send.prototype=?"
+			iargs = append(iargs, *from)
+		}
+	}
+	if *to != "" {
+		if *byagent {
+			filters[1] = "AND t.receiverid=?"
+			toid, err := strconv.Atoi(*to)
+			if err != nil {
+				log.Fatalf("invalid agent ID (-to=%v)", *to)
+			}
+			iargs = append(iargs, toid)
+		} else {
+			filters[1] = "AND recv.prototype=?"
+			iargs = append(iargs, *to)
+		}
+	}
+	if *commod != "" {
+		filters[2] = "AND t.commodity=?"
+		iargs = append(iargs, *commod)
+	}
+	filters[3] = nuclidefilter(*nucs)
+
+	tmpl := template.Must(template.New("sql").Parse(s))
+	var buf bytes.Buffer
+	tmpl.Execute(&buf, filters)
+	customSql[cmd] = buf.String()
+	doCustom(os.Stdout, cmd, iargs...)
 }
