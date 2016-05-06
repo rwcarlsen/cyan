@@ -113,7 +113,8 @@ func TestTree(t *testing.T) {
 func TestNode_Taint(t *testing.T) {
 	for i, test := range taintcases {
 		t.Logf("Case %v (tree %v, res %v)", i, test.TreeIndex+1, test.Res)
-		roots := Tree(treecases[test.TreeIndex].Raw)
+		nodelist := treecases[test.TreeIndex].Raw
+		roots := Tree(nodelist)
 
 		var tree *Node
 		for _, root := range roots {
@@ -127,7 +128,7 @@ func TestNode_Taint(t *testing.T) {
 			continue
 		}
 
-		taints := tree.Taint()
+		taints := tree.Taint(nodelist[len(nodelist)-1].Time + 1)
 		for agentid, got := range taints {
 			t.Logf("  Agent %v:", agentid)
 			want := test.Want[agentid]

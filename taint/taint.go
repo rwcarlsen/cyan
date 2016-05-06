@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -21,6 +22,21 @@ type Node struct {
 	taintfrac float64
 	par1mark  bool
 	par2mark  bool
+}
+
+type bytime []*NodeData
+
+func (ns bytime) Len() int      { return len(ns) }
+func (ns bytime) Swap(i, j int) { ns[i], ns[j] = ns[j], ns[i] }
+func (ns bytime) Less(i, j int) bool {
+	if ns[i].Time != ns[j].Time {
+		return ns[i].Time < ns[j].Time
+	} else if ns[i].ResId != ns[j].ResId {
+		return ns[i].ResId < ns[j].ResId
+	} else if ns[i].AgentId != -1 && ns[j].AgentId != -1 {
+		return ns[i].AgentId < ns[j].AgentId
+	}
+	return false
 }
 
 func (n *Node) String() string {
@@ -65,6 +81,7 @@ type NodeData struct {
 type nodeMap map[int][]*Node
 
 func Tree(nodes []*NodeData) (roots []*Node) {
+	sort.Sort(bytime(nodes))
 	nodemap := nodeMap{}
 	nextid := 0
 
@@ -111,7 +128,32 @@ func Tree(nodes []*NodeData) (roots []*Node) {
 			roots = append(roots, node)
 		}
 	}
+
+	for _, root := range roots {
+		root.fixagentid()
+	}
 	return roots
+}
+
+// fixagentid assigns missing AgentId's to nodes. some nodes if generated from a cyclus database query don't have AgentId's
+// associated with them and had them marked as -1.  These are ommitted from
+// the db because they don't affect inventories (i.e. intra-time-step,
+// intra-agent modifications).  So we can fill these in by assigning the same
+// agentid as the parent node(s).
+func (n *Node) fixagentid() {
+	if n == nil {
+		return
+	}
+
+	if n.AgentId == -1 {
+		if n.Parent1 != nil {
+			n.AgentId = n.Parent1.AgentId
+		} else {
+			// give up?
+		}
+	}
+	n.Child1.fixagentid()
+	n.Child2.fixagentid()
 }
 
 type TaintVal struct {
@@ -149,16 +191,23 @@ func (n *Node) ResetTaint() {
 // Taint returns a map of agent ID to a slice/time-series of taint values of
 // aggregate resource in that agent originating from the node's resource
 // object going forward down the graph through all time.
-func (n *Node) Taint() map[int][]TaintVal {
+func (n *Node) Taint(tmax int) map[int][]TaintVal {
 	all := map[int][]TaintVal{}
 
 	n.ResetTaint()
 	n.taintfrac = 1.0
+
+	// mark dirty edges
 	n.Child1.mark()
 	n.Child2.mark()
+
+	// calculate taintfracs
 	n.Child1.taint()
 	n.Child2.taint()
-	n.taintnodes(all)
+
+	// aggregate by agent id and time
+	n.taintnodes(all, tmax)
+
 	return all
 }
 
@@ -203,15 +252,14 @@ func (n *Node) taint() {
 			n.Parent2.taintfrac*n.Parent2.Quantity) / n.Quantity
 	}
 
-	fmt.Printf("agent %v, t %v: taint=%v\n", n.AgentId, n.Time, n.taintfrac)
 	n.Child1.taint()
 	n.Child2.taint()
 }
 
 // taintnodes walks the tree building a time-series of taint values for each
 // agent id.
-func (n *Node) taintnodes(all map[int][]TaintVal) {
-	for len(all[n.AgentId]) < n.Time+1 {
+func (n *Node) taintnodes(all map[int][]TaintVal, tmax int) {
+	for len(all[n.AgentId]) < tmax {
 		all[n.AgentId] = append(all[n.AgentId], TaintVal{})
 	}
 
@@ -227,22 +275,46 @@ func (n *Node) taintnodes(all map[int][]TaintVal) {
 			Taint:    taintqty / qty,
 			Quantity: qty,
 		}
+
+		// fill in blank times between this node and its next child
+		if n.Child1 != nil {
+			for t := n.Time + 1; t < n.Child1.Time; t++ {
+				prev := all[n.AgentId][t]
+				qty := prev.Quantity + n.Quantity
+				taintqty := prev.Taint*prev.Quantity + n.taintfrac*n.Quantity
+				all[n.AgentId][t] = TaintVal{
+					Taint:    taintqty / qty,
+					Quantity: qty,
+				}
+			}
+		} else if n.Child1 == nil {
+			// leaf node taint needs to be forward propogated through all blank times
+			for i, prev := range all[n.AgentId][n.Time+1:] {
+				t := i + n.Time + 1
+				qty := prev.Quantity + n.Quantity
+				taintqty := prev.Taint*prev.Quantity + n.taintfrac*n.Quantity
+				all[n.AgentId][t] = TaintVal{
+					Taint:    taintqty / qty,
+					Quantity: qty,
+				}
+			}
+		}
 	}
 
 	if n.Child1 != nil {
-		n.Child1.taintnodes(all)
+		n.Child1.taintnodes(all, tmax)
 	}
 	if n.Child2 != nil {
-		n.Child2.taintnodes(all)
+		n.Child2.taintnodes(all, tmax)
 	}
 }
 
 func TreeFromDb(db *sql.DB, simid []byte) (roots []*Node) {
 	s := `SELECT r.ResourceId,r.TimeCreated,inv.StartTime,r.Quantity,r.QualId,r.Parent1,r.Parent2,inv.AgentId
 	      FROM resources AS r
-		  INNER JOIN Inventories AS inv ON inv.SimId = r.SimId AND inv.ResourceId = r.ResourceId
+		  LEFT JOIN Inventories AS inv ON inv.SimId = r.SimId AND inv.ResourceId = r.ResourceId
 		  WHERE r.SimId = ?
-		  ORDER BY r.TimeCreated,r.ResourceId,inv.StartTime`
+		  ORDER BY r.ResourceId,r.TimeCreated,inv.StartTime`
 	rows, err := db.Query(s, simid)
 	if err != nil {
 		panic(err.Error())
@@ -250,12 +322,13 @@ func TreeFromDb(db *sql.DB, simid []byte) (roots []*Node) {
 	defer rows.Close()
 
 	nodes := []*NodeData{}
-	var time2 int
+	var time2 sql.NullInt64
+	var agentid sql.NullInt64
 
 	for rows.Next() {
 		n := &NodeData{}
 
-		err := rows.Scan(&n.ResId, &n.Time, &time2, &n.Quantity, &n.QualId, &n.Parent1, &n.Parent2, &n.AgentId)
+		err := rows.Scan(&n.ResId, &n.Time, &time2, &n.Quantity, &n.QualId, &n.Parent1, &n.Parent2, &agentid)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -264,8 +337,13 @@ func TreeFromDb(db *sql.DB, simid []byte) (roots []*Node) {
 		// its current state, then the node must be associated with the time
 		// when the resource moved into that agent rather than when it was
 		// created.
-		if time2 > n.Time {
-			n.Time = time2
+		if time2.Valid && int(time2.Int64) > n.Time {
+			n.Time = int(time2.Int64)
+		}
+
+		n.AgentId = -1
+		if agentid.Valid {
+			n.AgentId = int(agentid.Int64)
 		}
 
 		nodes = append(nodes, n)

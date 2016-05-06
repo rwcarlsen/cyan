@@ -20,6 +20,7 @@ import (
 	"github.com/rwcarlsen/cyan/nuc"
 	"github.com/rwcarlsen/cyan/post"
 	"github.com/rwcarlsen/cyan/query"
+	"github.com/rwcarlsen/cyan/taint"
 	_ "github.com/rwcarlsen/go-sqlite3"
 )
 
@@ -857,7 +858,13 @@ func doFlowGraph(cmd string, args []string) {
 	fmt.Println("    nodesep=1.0;")
 	fmt.Println("    edge [fontsize=9];")
 	for _, arc := range arcs {
-		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v\\n(%.3g kg)\"];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity)
+		srcname := arc.SrcProto
+		dstname := arc.DstProto
+		if !*proto {
+			srcname = fmt.Sprintf("%v %v", arc.SrcProto, arc.SrcId)
+			dstname = fmt.Sprintf("%v %v", arc.DstProto, arc.DstId)
+		}
+		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v\\n(%.3g kg)\"];\n", srcname, dstname, arc.Commod, arc.Quantity)
 	}
 	fmt.Println("}")
 }
@@ -990,63 +997,59 @@ func doTaint(cmd string, args []string) {
 		log.Printf("%v\n", cmds.Help(cmd))
 		fs.PrintDefaults()
 	}
-	t := fs.Int("time", -1, "time step for which to print taint")
+	t := fs.Int("t", -1, "time step for which to print taint")
 	res := fs.Int("res", -1, "resource ID of object to track")
 	fs.Parse(args)
 	initdb()
 
 	if *t == -1 || *res == -1 {
-		log.Fatalf("'-t' and '-res' flags are both required")
+		log.Fatalf("'-t' and '-res' flags are both required and cannot be negative")
 	}
 
-	s := `
-SELECT t.time AS Time,t.SenderId AS SenderId,send.Prototype AS SenderProto,t.ReceiverId AS ReceiverId,recv.Prototype AS ReceiverProto,t.Commodity AS Commodity,SUM(r.Quantity*c.MassFrac) AS Quantity
-FROM transactions AS t
-JOIN resources AS r ON t.resourceid=r.resourceid AND r.simid=t.simid
-JOIN agents AS send ON t.senderid=send.agentid AND send.simid=t.simid
-JOIN agents AS recv ON t.receiverid=recv.agentid AND recv.simid=t.simid
-JOIN compositions AS c ON c.qualid=r.qualid AND c.simid=t.simid
-WHERE t.simid=? {{index . 0}} {{index . 1}} {{index . 2}} {{index . 3}}
-GROUP BY t.transactionid
-`
-
-	filters := make([]string, 4)
-	iargs := []interface{}{simid}
-	if *from != "" {
-		if *byagent {
-			filters[0] = "AND t.senderid=?"
-			fromid, err := strconv.Atoi(*from)
-			if err != nil {
-				log.Fatalf("invalid agent ID (-from=%v)", *from)
-			}
-			iargs = append(iargs, fromid)
-		} else {
-			filters[0] = "AND send.prototype=?"
-			iargs = append(iargs, *from)
+	roots := taint.TreeFromDb(db, simid)
+	var base *taint.Node
+	for _, root := range roots {
+		if base = root.Locate(*res); base != nil {
+			break
 		}
 	}
-	if *to != "" {
-		if *byagent {
-			filters[1] = "AND t.receiverid=?"
-			toid, err := strconv.Atoi(*to)
-			if err != nil {
-				log.Fatalf("invalid agent ID (-to=%v)", *to)
-			}
-			iargs = append(iargs, toid)
-		} else {
-			filters[1] = "AND recv.prototype=?"
-			iargs = append(iargs, *to)
-		}
+	if base == nil {
+		log.Fatalf("couldn't find resource id %v in graph", *res)
 	}
-	if *commod != "" {
-		filters[2] = "AND t.commodity=?"
-		iargs = append(iargs, *commod)
-	}
-	filters[3] = nuclidefilter(*nucs)
 
-	tmpl := template.Must(template.New("sql").Parse(s))
-	var buf bytes.Buffer
-	tmpl.Execute(&buf, filters)
-	customSql[cmd] = buf.String()
-	doCustom(os.Stdout, cmd, iargs...)
+	si, err := query.SimStat(db, simid)
+	fatalif(err)
+	taints := base.Taint(si.Duration)
+
+	// print graph dot file
+	byproto := false
+	t1, t2 := 0, -1
+	arcs, err := query.FlowGraph(db, simid, t1, t2, byproto)
+	fatalif(err)
+
+	fmt.Println("digraph ResourceFlows {")
+	fmt.Println("    overlap = false;")
+	fmt.Println("    nodesep=1.0;")
+	fmt.Println("    edge [fontsize=9];")
+	for _, arc := range arcs {
+		var srctaint taint.TaintVal
+		if ts := taints[arc.SrcId]; *t < len(ts) {
+			srctaint = ts[*t]
+		} else if len(ts) > 0 {
+			srctaint = ts[len(ts)-1]
+		}
+		var dsttaint taint.TaintVal
+		if ts := taints[arc.DstId]; *t < len(ts) {
+			dsttaint = ts[*t]
+		} else if len(ts) > 0 {
+			dsttaint = ts[len(ts)-1]
+		}
+
+		//srccolor := (srctaint.Taint * srctaint.Quantity) / base.Quantity
+		//dstcolor := (dsttaint.Taint * dsttaint.Quantity) / base.Quantity
+		srcname := fmt.Sprintf("%v %v\\n(%.5g kg of %.5g taint)", arc.SrcProto, arc.SrcId, srctaint.Quantity, srctaint.Taint)
+		dstname := fmt.Sprintf("%v %v\\n(%.5g kg of %.5g taint)", arc.DstProto, arc.DstId, dsttaint.Quantity, dsttaint.Taint)
+		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v\"];\n", srcname, dstname, arc.Commod)
+	}
+	fmt.Println("}")
 }

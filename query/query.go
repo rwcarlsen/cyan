@@ -245,8 +245,11 @@ func InvMassAt(db *sql.DB, simid []byte, t int, agents ...int) (mass float64, er
 }
 
 type FlowArc struct {
-	Src      string
-	Dst      string
+	SrcId    int
+	DstId    int
+	SrcProto string
+	DstProto string
+	AgentId  int
 	Commod   string
 	Quantity float64
 }
@@ -262,7 +265,7 @@ func FlowGraph(db *sql.DB, simid []byte, t0, t1 int, groupByProto bool) (arcs []
 
 	var sql string
 	if !groupByProto {
-		sql = `SELECT snd.Prototype || " " || tr.SenderId,rcv.Prototype || " " || tr.ReceiverId,tr.Commodity,SUM(res.Quantity) FROM (
+		sql = `SELECT snd.AgentId,rcv.AgentId,snd.Prototype,rcv.Prototype,tr.Commodity,SUM(res.Quantity) FROM (
 					Resources AS res
 					INNER JOIN Transactions AS tr ON tr.ResourceId = res.ResourceId
 					INNER JOIN Agents AS snd ON snd.AgentId = tr.SenderId
@@ -272,7 +275,7 @@ func FlowGraph(db *sql.DB, simid []byte, t0, t1 int, groupByProto bool) (arcs []
 					AND tr.Time >= ? AND tr.Time < ?
 				) GROUP BY tr.SenderId,tr.ReceiverId,tr.Commodity;`
 	} else {
-		sql = `SELECT snd.Prototype,rcv.Prototype,tr.Commodity,SUM(res.Quantity) FROM (
+		sql = `SELECT snd.AgentId,rcv.AgentId,snd.Prototype,rcv.Prototype,tr.Commodity,SUM(res.Quantity) FROM (
 					Resources AS res
 					INNER JOIN Transactions AS tr ON tr.ResourceId = res.ResourceId
 					INNER JOIN Agents AS snd ON snd.AgentId = tr.SenderId
@@ -289,7 +292,7 @@ func FlowGraph(db *sql.DB, simid []byte, t0, t1 int, groupByProto bool) (arcs []
 	}
 	for rows.Next() {
 		arc := FlowArc{}
-		if err := rows.Scan(&arc.Src, &arc.Dst, &arc.Commod, &arc.Quantity); err != nil {
+		if err := rows.Scan(&arc.SrcId, &arc.DstId, &arc.SrcProto, &arc.DstProto, &arc.Commod, &arc.Quantity); err != nil {
 			return nil, err
 		}
 		arcs = append(arcs, arc)
