@@ -1046,8 +1046,8 @@ func doTaint(cmd string, args []string) {
 			dsttaint = ts[len(ts)-1]
 		}
 
-		srccolor := byte(255 * (1 - math.Pow(srctaint.Taint*srctaint.Quantity/base.Quantity, 1.0/3)))
-		dstcolor := byte(255 * (1 - math.Pow(dsttaint.Taint*dsttaint.Quantity/base.Quantity, 1.0/3)))
+		srccolor := byte(255 * (1 - math.Pow(srctaint.Taint*srctaint.Quantity/base.Quantity, 1.0/5)))
+		dstcolor := byte(255 * (1 - math.Pow(dsttaint.Taint*dsttaint.Quantity/base.Quantity, 1.0/5)))
 		srcname := fmt.Sprintf("%v %v\\n(%.3e kg of %.4f taint)", arc.SrcProto, arc.SrcId, srctaint.Quantity, srctaint.Taint)
 		dstname := fmt.Sprintf("%v %v\\n(%.3e kg of %.4f taint)", arc.DstProto, arc.DstId, dsttaint.Quantity, dsttaint.Taint)
 
