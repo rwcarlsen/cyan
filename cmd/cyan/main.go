@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -1045,10 +1046,13 @@ func doTaint(cmd string, args []string) {
 			dsttaint = ts[len(ts)-1]
 		}
 
-		//srccolor := (srctaint.Taint * srctaint.Quantity) / base.Quantity
-		//dstcolor := (dsttaint.Taint * dsttaint.Quantity) / base.Quantity
-		srcname := fmt.Sprintf("%v %v\\n(%.5g kg of %.5g taint)", arc.SrcProto, arc.SrcId, srctaint.Quantity, srctaint.Taint)
-		dstname := fmt.Sprintf("%v %v\\n(%.5g kg of %.5g taint)", arc.DstProto, arc.DstId, dsttaint.Quantity, dsttaint.Taint)
+		srccolor := byte(255 * (1 - math.Pow(srctaint.Taint*srctaint.Quantity/base.Quantity, 1.0/3)))
+		dstcolor := byte(255 * (1 - math.Pow(dsttaint.Taint*dsttaint.Quantity/base.Quantity, 1.0/3)))
+		srcname := fmt.Sprintf("%v %v\\n(%.3e kg of %.4f taint)", arc.SrcProto, arc.SrcId, srctaint.Quantity, srctaint.Taint)
+		dstname := fmt.Sprintf("%v %v\\n(%.3e kg of %.4f taint)", arc.DstProto, arc.DstId, dsttaint.Quantity, dsttaint.Taint)
+
+		fmt.Printf("    \"%v\" [style=filled, fillcolor=\"#FF%.2X%.2X\"];\n", srcname, srccolor, srccolor)
+		fmt.Printf("    \"%v\" [style=filled, fillcolor=\"#FF%.2X%.2X\"];\n", dstname, dstcolor, dstcolor)
 		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v\"];\n", srcname, dstname, arc.Commod)
 	}
 	fmt.Println("}")
