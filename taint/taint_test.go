@@ -117,8 +117,9 @@ func TestNode_Taint(t *testing.T) {
 		roots := Tree(nodelist)
 
 		var tree *Node
+		v := Visited{}
 		for _, root := range roots {
-			tree = root.Locate(test.Res)
+			tree = root.Locate(v, test.Res)
 			if tree != nil {
 				break
 			}

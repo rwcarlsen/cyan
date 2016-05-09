@@ -1009,8 +1009,9 @@ func doTaint(cmd string, args []string) {
 
 	roots := taint.TreeFromDb(db, simid)
 	var base *taint.Node
+	visited := taint.Visited{}
 	for _, root := range roots {
-		if base = root.Locate(*res); base != nil {
+		if base = root.Locate(visited, *res); base != nil {
 			break
 		}
 	}

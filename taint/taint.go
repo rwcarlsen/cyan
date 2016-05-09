@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+type Visited map[*Node]struct{}
+
 type Node struct {
 	Id        int
 	ResId     int
@@ -98,6 +100,7 @@ func Tree(nodes []*NodeData) (roots []*Node) {
 
 		parent1, parent2 := row.Parent1, row.Parent2
 		if len(nodemap[node.ResId]) == 0 {
+
 			// this node's parent(s) have a different resource id than this node
 			if parent1 != 0 {
 				p1 := nodemap[parent1][len(nodemap[parent1])-1]
@@ -124,13 +127,14 @@ func Tree(nodes []*NodeData) (roots []*Node) {
 		}
 
 		nodemap[node.ResId] = append(nodemap[node.ResId], node)
-		if node.Parent1 == nil && node.Parent2 == nil {
+		if parent1 == 0 && parent2 == 0 {
 			roots = append(roots, node)
 		}
 	}
 
+	v := Visited{}
 	for _, root := range roots {
-		root.fixagentid()
+		root.fixagentid(v)
 	}
 	return roots
 }
@@ -140,10 +144,13 @@ func Tree(nodes []*NodeData) (roots []*Node) {
 // the db because they don't affect inventories (i.e. intra-time-step,
 // intra-agent modifications).  So we can fill these in by assigning the same
 // agentid as the parent node(s).
-func (n *Node) fixagentid() {
+func (n *Node) fixagentid(visited Visited) {
 	if n == nil {
 		return
+	} else if _, ok := visited[n]; ok {
+		return
 	}
+	visited[n] = struct{}{}
 
 	if n.AgentId == -1 {
 		if n.Parent1 != nil {
@@ -152,8 +159,9 @@ func (n *Node) fixagentid() {
 			// give up?
 		}
 	}
-	n.Child1.fixagentid()
-	n.Child2.fixagentid()
+
+	n.Child1.fixagentid(visited)
+	n.Child2.fixagentid(visited)
 }
 
 type TaintVal struct {
@@ -163,29 +171,37 @@ type TaintVal struct {
 
 // Locate searches for and returns the neares (shallowest) node with the given
 // Resource ID (resid).  It returns nil if not found.
-func (n *Node) Locate(resid int) *Node {
+func (n *Node) Locate(v Visited, resid int) *Node {
 	if n == nil {
 		return nil
-	} else if n.ResId == resid {
+	} else if _, ok := v[n]; ok {
+		return nil
+	}
+	v[n] = struct{}{}
+
+	if n.ResId == resid {
 		return n
-	} else if got := n.Child1.Locate(resid); got != nil {
+	} else if got := n.Child1.Locate(v, resid); got != nil {
 		return got
-	} else if got := n.Child2.Locate(resid); got != nil {
+	} else if got := n.Child2.Locate(v, resid); got != nil {
 		return got
 	}
 	return nil
 }
 
-func (n *Node) ResetTaint() {
+func (n *Node) ResetTaint(v Visited) {
 	if n == nil {
 		return
+	} else if _, ok := v[n]; ok {
+		return
 	}
+	v[n] = struct{}{}
 
 	n.taintfrac = -1
 	n.par1mark = false
 	n.par2mark = false
-	n.Child1.ResetTaint()
-	n.Child2.ResetTaint()
+	n.Child1.ResetTaint(v)
+	n.Child2.ResetTaint(v)
 }
 
 // Taint returns a map of agent ID to a slice/time-series of taint values of
@@ -193,17 +209,19 @@ func (n *Node) ResetTaint() {
 // object going forward down the graph through all time.
 func (n *Node) Taint(tmax int) map[int][]TaintVal {
 	all := map[int][]TaintVal{}
+	n.ResetTaint(Visited{})
 
-	n.ResetTaint()
 	n.taintfrac = 1.0
 
 	// mark dirty edges
-	n.Child1.mark()
-	n.Child2.mark()
+	v := Visited{}
+	n.Child1.mark(v)
+	n.Child2.mark(v)
 
 	// calculate taintfracs
-	n.Child1.taint()
-	n.Child2.taint()
+	v = Visited{}
+	n.Child1.taint(v)
+	n.Child2.taint(v)
 
 	// aggregate by agent id and time
 	n.taintnodes(all, tmax)
@@ -215,10 +233,13 @@ func (n *Node) marked() bool {
 	return (n != nil) && (n.par1mark || n.par2mark)
 }
 
-func (n *Node) mark() {
+func (n *Node) mark(v Visited) {
 	if n == nil {
 		return
+	} else if _, ok := v[n]; ok {
+		return
 	}
+	v[n] = struct{}{}
 
 	if n.Parent1.marked() {
 		n.par1mark = true
@@ -227,13 +248,15 @@ func (n *Node) mark() {
 		n.par2mark = true
 	}
 
-	n.Child1.mark()
-	n.Child2.mark()
+	n.Child1.mark(v)
+	n.Child2.mark(v)
 }
 
 // taint calculates the taint on each node using a recursive depth-first walk.
-func (n *Node) taint() {
+func (n *Node) taint(v Visited) {
 	if n == nil {
+		return
+	} else if _, ok := v[n]; ok {
 		return
 	}
 
@@ -245,6 +268,8 @@ func (n *Node) taint() {
 		return
 	}
 
+	v[n] = struct{}{}
+
 	if n.Parent2 == nil { // from a transmute, move, split
 		n.taintfrac = n.Parent1.taintfrac
 	} else { // from a combine/absorb
@@ -252,8 +277,8 @@ func (n *Node) taint() {
 			n.Parent2.taintfrac*n.Parent2.Quantity) / n.Quantity
 	}
 
-	n.Child1.taint()
-	n.Child2.taint()
+	n.Child1.taint(v)
+	n.Child2.taint(v)
 }
 
 // taintnodes walks the tree building a time-series of taint values for each
