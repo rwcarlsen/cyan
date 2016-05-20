@@ -163,7 +163,9 @@ func uploadInner(w http.ResponseWriter, r *http.Request, kill chan bool) {
 	fmt.Fprintln(dotf, "    nodesep=1.0;")
 	fmt.Fprintln(dotf, "    edge [fontsize=9];")
 	for _, arc := range arcs {
-		fmt.Fprintf(dotf, "    \"%v\" -> \"%v\" [label=\"%v\\n(%.3g kg)\"];\n", arc.Src, arc.Dst, arc.Commod, arc.Quantity)
+		src := fmt.Sprintf("%v %v", arc.SrcId, arc.SrcProto)
+		dst := fmt.Sprintf("%v %v", arc.DstId, arc.DstProto)
+		fmt.Fprintf(dotf, "    \"%v\" -> \"%v\" [label=\"%v\\n(%.3g kg)\"];\n", src, dst, arc.Commod, arc.Quantity)
 	}
 	fmt.Fprintln(dotf, "}")
 	dotf.Close()
