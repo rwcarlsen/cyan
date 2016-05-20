@@ -5,12 +5,17 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
+	"runtime/pprof"
 
 	"github.com/rwcarlsen/cyan/query"
 )
 
 // The number of sql commands to buffer before dumping to the output database.
 const DumpFreq = 100000
+
+var MemProfile int = 1000
+var walkCount int = 0
 
 var (
 	preExecStmts = []string{
@@ -288,6 +293,17 @@ func (c *Context) walkDown(node *Node) {
 		return
 	}
 	c.mappednodes[int32(node.ResId)] = struct{}{}
+
+	walkCount++
+	if MemProfile > 0 && walkCount == MemProfile {
+		f, err := os.Create("mem.prof")
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+		os.Exit(1)
+	}
 
 	// dump if necessary
 	c.resCount++
