@@ -44,26 +44,6 @@ var cmds = NewCmdSet()
 // map[cmdname]sqltext
 var customSql = map[string]string{}
 
-func plot(data *bytes.Buffer, style string, xlabel, ylabel, title string) {
-	s := ""
-	s += `set xlabel '{{.Xlabel}}';`
-	s += `set ylabel '{{.Ylabel}}';`
-	s += `plot '-' every ::2 using 1:2 with {{.Style}} title '{{.Title}}';`
-	s += `pause -1`
-
-	tmpl := template.Must(template.New("gnuplot").Parse(s))
-	var buf bytes.Buffer
-	config := struct{ Style, Xlabel, Ylabel, Title string }{style, xlabel, ylabel, title}
-	err := tmpl.Execute(&buf, config)
-	fatalif(err)
-
-	cmd := exec.Command("gnuplot", "-p", "-e", buf.String())
-	cmd.Stdin = data
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	fatalif(cmd.Run())
-}
-
 func init() {
 	cmds.RegisterDiv("General")
 	cmds.Register("sims", "list all simulations in the database", doSims)
@@ -90,32 +70,6 @@ func init() {
 	cmds.Register("energy", "thermal energy (J) generated between 2 timesteps", doEnergy)
 	cmds.Register("created", "material created by agents between 2 timesteps", doCreated)
 	cmds.Register("taint", "taint analysis...", doTaint)
-}
-
-func initdb() {
-	if *showquery {
-		// don't need a database for printing queries
-		return
-	} else if *dbname == "" {
-		log.Fatal("must specify database with -db flag")
-	}
-
-	var err error
-	db, err = sql.Open("sqlite3", *dbname)
-	fatalif(err)
-
-	if *simidstr == "" {
-		ids, err := query.SimIds(db)
-		fatalif(err)
-		simid = ids[0]
-	} else {
-		simid = uuid.Parse(*simidstr)
-		if simid == nil {
-			log.Fatalf("invalid simid '%s'", *simidstr)
-		}
-	}
-
-	post.Process(db)
 }
 
 func main() {
@@ -1057,4 +1011,50 @@ func doTaint(cmd string, args []string) {
 		fmt.Printf("    \"%v\" -> \"%v\" [label=\"%v\"];\n", srcname, dstname, arc.Commod)
 	}
 	fmt.Println("}")
+}
+
+func initdb() {
+	if *showquery {
+		// don't need a database for printing queries
+		return
+	} else if *dbname == "" {
+		log.Fatal("must specify database with -db flag")
+	}
+
+	var err error
+	db, err = sql.Open("sqlite3", *dbname)
+	fatalif(err)
+
+	if *simidstr == "" {
+		ids, err := query.SimIds(db)
+		fatalif(err)
+		simid = ids[0]
+	} else {
+		simid = uuid.Parse(*simidstr)
+		if simid == nil {
+			log.Fatalf("invalid simid '%s'", *simidstr)
+		}
+	}
+
+	post.Process(db)
+}
+
+func plot(data *bytes.Buffer, style string, xlabel, ylabel, title string) {
+	s := ""
+	s += `set xlabel '{{.Xlabel}}';`
+	s += `set ylabel '{{.Ylabel}}';`
+	s += `plot '-' every ::2 using 1:2 with {{.Style}} title '{{.Title}}';`
+	s += `pause -1`
+
+	tmpl := template.Must(template.New("gnuplot").Parse(s))
+	var buf bytes.Buffer
+	config := struct{ Style, Xlabel, Ylabel, Title string }{style, xlabel, ylabel, title}
+	err := tmpl.Execute(&buf, config)
+	fatalif(err)
+
+	cmd := exec.Command("gnuplot", "-p", "-e", buf.String())
+	cmd.Stdin = data
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	fatalif(cmd.Run())
 }
