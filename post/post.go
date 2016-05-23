@@ -297,19 +297,20 @@ func (c *Context) walkDown(node *Node) {
 
 	// find resource's children
 	kids := make([]*Node, 0, 2)
-	rows, err := c.tmpResStmt.Query(node.ResId, node.ResId)
-	panicif(err)
-	defer rows.Close()
-
-	for rows.Next() {
-		child := &Node{EndTime: math.MaxInt32}
-		err := rows.Scan(&child.ResId, &child.StartTime, &child.QualId, &child.Quantity)
+	func() { // this helps keep the stack size reasonable despite heavy recursion
+		rows, err := c.tmpResStmt.Query(node.ResId, node.ResId)
 		panicif(err)
-		node.EndTime = child.StartTime
-		kids = append(kids, child)
-	}
-	panicif(rows.Err())
-	rows.Close() // Close is idempotent - and this function is recursive.
+		defer rows.Close()
+
+		for rows.Next() {
+			child := &Node{EndTime: math.MaxInt32}
+			err := rows.Scan(&child.ResId, &child.StartTime, &child.QualId, &child.Quantity)
+			panicif(err)
+			node.EndTime = child.StartTime
+			kids = append(kids, child)
+		}
+		panicif(rows.Err())
+	}()
 
 	// find resources owner changes (that occurred before children)
 	owners, times := c.getNewOwners(node.OwnerId, node.ResId)
